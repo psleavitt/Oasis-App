@@ -528,10 +528,15 @@
 <div id="app">
   <div class="topbar">
     <div class="wordmark">Oasis</div>
-    <div class="code-chip">
-      <span class="sync-dot" id="syncDot"></span>
-      <span id="codeLabel" class="mono"></span>
-      <button class="icon-btn" title="Switch family code" onclick="switchCode()" style="margin-left:4px;">⇄</button>
+    <div style="display:flex; align-items:center; gap:8px;">
+      <button class="icon-btn" title="Export all data as JSON" onclick="exportDataJSON()">⬇</button>
+      <button class="icon-btn" title="Import data from JSON" onclick="document.getElementById('dataJsonInput').click()">⬆</button>
+      <input type="file" id="dataJsonInput" accept=".json" style="display:none;" onchange="importDataJSON(this.files[0])">
+      <div class="code-chip">
+        <span class="sync-dot" id="syncDot"></span>
+        <span id="codeLabel" class="mono"></span>
+        <button class="icon-btn" title="Switch family code" onclick="switchCode()" style="margin-left:4px;">⇄</button>
+      </div>
     </div>
   </div>
 
@@ -624,8 +629,9 @@
       <div class="subview" id="sub-packing">
         <div class="section-head" style="margin-bottom:10px;">
           <div class="section-sub">Shared list — everyone can check off</div>
-          <div style="display:flex; gap:8px;">
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
             <button class="btn btn-ghost btn-sm" onclick="openTemplateModal()">Use template</button>
+            <button class="btn btn-ghost btn-sm" onclick="saveTripPackingAsTemplate()">Save as template</button>
             <button class="btn btn-ghost btn-sm" onclick="openPackItemModal()">+ Add item</button>
           </div>
         </div>
@@ -677,7 +683,12 @@
           <h2>Packing lists</h2>
           <div class="section-sub">Build reusable templates — apply them to any trip in one tap.</div>
         </div>
-        <button class="btn btn-primary" onclick="openTemplateEditModal()">+ New template</button>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button class="btn btn-ghost btn-sm" onclick="exportTemplatesCSV()">Export CSV</button>
+          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('templateCsvInput').click()">Import CSV</button>
+          <button class="btn btn-primary" onclick="openTemplateEditModal()">+ New template</button>
+        </div>
+        <input type="file" id="templateCsvInput" accept=".csv" style="display:none;" onchange="importTemplatesCSV(this.files[0])">
       </div>
       <div id="templatesList"></div>
     </div>
@@ -1412,8 +1423,18 @@ function renderTemplatesList(){
 function openTemplateEditModal(id){
   const t = id ? db.templates.find(x => x.id === id) : { name:'', items:[] };
   templateDraftItems = JSON.parse(JSON.stringify(t.items || []));
+  const otherTemplates = db.templates.filter(x => !x._deleted && x.id !== id);
   openModal(`
     <h3>${id ? 'Edit' : 'New'} packing template</h3>
+    ${!id && otherTemplates.length > 0 ? `
+      <div class="form-row">
+        <label>Copy from an existing template (optional)</label>
+        <select id="m-tcopyfrom" onchange="copyTemplateDraftFrom(this.value)">
+          <option value="">— Start from scratch —</option>
+          ${otherTemplates.map(x => `<option value="${x.id}">${esc(x.name)} (${x.items.length} items)</option>`).join('')}
+        </select>
+      </div>
+    ` : ''}
     <div class="form-row"><label>Template name</label><input type="text" id="m-tname" placeholder="e.g. Beach trip" value="${esc(t.name)}"></div>
     <label>Items</label>
     <div id="templateItemRows" style="margin-bottom:10px;"></div>
@@ -1424,6 +1445,15 @@ function openTemplateEditModal(id){
       <button class="btn btn-primary" onclick="saveTemplateEdit(${id ? `'${id}'` : 'null'})">Save</button>
     </div>
   `);
+  renderTemplateDraftRows();
+}
+function copyTemplateDraftFrom(templateId){
+  if(!templateId){ templateDraftItems = []; renderTemplateDraftRows(); return; }
+  const src = db.templates.find(x => x.id === templateId);
+  if(!src) return;
+  templateDraftItems = JSON.parse(JSON.stringify(src.items || []));
+  const nameField = document.getElementById('m-tname');
+  if(nameField && !nameField.value.trim()){ nameField.value = src.name + ' copy'; }
   renderTemplateDraftRows();
 }
 function renderTemplateDraftRows(){
@@ -1471,6 +1501,179 @@ function deleteTemplate(id){
   dirty.templates.delete(id);
   supaFetch('/rest/v1/' + TABLES.templates + '?id=eq.' + id, { method:'DELETE' }).catch(()=>{});
   saveLocal(); closeModal(); renderTemplatesList();
+}
+
+function saveTripPackingAsTemplate(){
+  const t = db.trips.find(r => r.id === currentTripId);
+  const items = db.packing.filter(p => p.trip_id === currentTripId && !p._deleted);
+  if(items.length === 0){ toast('This trip has no packing items yet'); return; }
+  const name = prompt('Save this packing list as a template named:', (t ? t.name : 'Trip') + ' packing list');
+  if(!name) return;
+  const row = {
+    id: uid(), family_code: familyCode, name: name.trim() || 'Untitled template',
+    items: items.map(p => ({ name: p.name, category: p.category || 'General' })),
+    created_at: nowIso(), updated_at: nowIso()
+  };
+  db.templates.push(row);
+  markDirty('templates', row.id);
+  toast('Saved as a new template');
+}
+
+/* ---------- CSV import/export for packing templates ---------- */
+function csvEscape(val){
+  val = (val == null) ? '' : String(val);
+  if(/[",\n]/.test(val)){ return '"' + val.replace(/"/g, '""') + '"'; }
+  return val;
+}
+function csvParseLine(line){
+  // Minimal RFC4180-ish parser for a single line already split on real newlines
+  const out = []; let cur = ''; let inQuotes = false;
+  for(let i = 0; i < line.length; i++){
+    const c = line[i];
+    if(inQuotes){
+      if(c === '"'){
+        if(line[i+1] === '"'){ cur += '"'; i++; } else { inQuotes = false; }
+      } else { cur += c; }
+    } else {
+      if(c === '"'){ inQuotes = true; }
+      else if(c === ','){ out.push(cur); cur = ''; }
+      else { cur += c; }
+    }
+  }
+  out.push(cur);
+  return out;
+}
+function parseCSV(text){
+  // Handles quoted fields that may contain embedded newlines
+  const rows = []; let cur = ''; let inQuotes = false; let row = [];
+  const push = () => { row.push(cur); cur = ''; };
+  const pushRow = () => { push(); rows.push(row); row = []; };
+  for(let i = 0; i < text.length; i++){
+    const c = text[i];
+    if(inQuotes){
+      if(c === '"'){
+        if(text[i+1] === '"'){ cur += '"'; i++; } else { inQuotes = false; }
+      } else { cur += c; }
+    } else {
+      if(c === '"'){ inQuotes = true; }
+      else if(c === ','){ push(); }
+      else if(c === '\n'){ pushRow(); }
+      else if(c === '\r'){ /* skip */ }
+      else { cur += c; }
+    }
+  }
+  if(cur.length > 0 || row.length > 0){ pushRow(); }
+  return rows.filter(r => r.length > 1 || (r[0] && r[0].trim() !== ''));
+}
+function exportTemplatesCSV(){
+  const templates = db.templates.filter(t => !t._deleted);
+  if(templates.length === 0){ toast('No templates to export yet'); return; }
+  const rows = [['template_name','item_name','item_category']];
+  templates.forEach(t => {
+    if(t.items.length === 0){ rows.push([t.name, '', '']); }
+    t.items.forEach(item => rows.push([t.name, item.name, item.category || 'General']));
+  });
+  const csv = rows.map(r => r.map(csvEscape).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'oasis-packing-templates.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+function importTemplatesCSV(file){
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try{
+      const rows = parseCSV(reader.result);
+      if(rows.length === 0){ toast('That CSV looks empty'); return; }
+      let dataRows = rows;
+      const header = rows[0].map(h => (h||'').trim().toLowerCase());
+      if(header[0] === 'template_name'){ dataRows = rows.slice(1); }
+      const existingNames = new Set(db.templates.filter(t => !t._deleted).map(t => t.name));
+      const grouped = {};
+      dataRows.forEach(r => {
+        const tname = (r[0] || '').trim();
+        const iname = (r[1] || '').trim();
+        const icat = (r[2] || '').trim() || 'General';
+        if(!tname) return;
+        if(!grouped[tname]) grouped[tname] = [];
+        if(iname) grouped[tname].push({ name: iname, category: icat });
+      });
+      let importedCount = 0;
+      Object.keys(grouped).forEach(name => {
+        let finalName = name;
+        if(existingNames.has(finalName)){ finalName = name + ' (imported)'; }
+        const row = { id: uid(), family_code: familyCode, name: finalName, items: grouped[name], created_at: nowIso(), updated_at: nowIso() };
+        db.templates.push(row);
+        markDirty('templates', row.id);
+        importedCount++;
+      });
+      renderTemplatesList();
+      toast(importedCount + ' template' + (importedCount===1?'':'s') + ' imported');
+    }catch(e){
+      toast('Could not read that CSV file');
+    }
+  };
+  reader.readAsText(file);
+  document.getElementById('templateCsvInput').value = '';
+}
+
+/* ---------- Full data import/export as JSON ---------- */
+function exportDataJSON(){
+  const payload = { app: 'oasis', version: 1, exported_at: nowIso(), family_code: familyCode, data: db };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'oasis-data-' + familyCode + '-' + new Date().toISOString().slice(0,10) + '.json';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+function importDataJSON(file){
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    let parsed;
+    try{ parsed = JSON.parse(reader.result); }
+    catch(e){ toast('That file is not valid JSON'); document.getElementById('dataJsonInput').value=''; return; }
+    const incoming = parsed && parsed.data ? parsed.data : parsed;
+    if(!incoming || typeof incoming !== 'object'){ toast('That file doesn\'t look like Oasis data'); document.getElementById('dataJsonInput').value=''; return; }
+    const knownKeys = Object.keys(TABLES);
+    const foundKeys = knownKeys.filter(k => Array.isArray(incoming[k]));
+    if(foundKeys.length === 0){ toast('No recognizable Oasis data found in that file'); document.getElementById('dataJsonInput').value=''; return; }
+    const ok = confirm(
+      'Import ' + foundKeys.join(', ') + ' from this file?\n\n' +
+      'This merges into your current data — for any matching item, whichever version was ' +
+      'edited most recently wins. Nothing will be deleted. This will also sync to Supabase ' +
+      'once merged.'
+    );
+    if(!ok){ document.getElementById('dataJsonInput').value=''; return; }
+    let mergedCount = 0;
+    foundKeys.forEach(key => {
+      incoming[key].forEach(remote => {
+        if(!remote || !remote.id) return;
+        const idx = db[key].findIndex(r => r.id === remote.id);
+        if(idx === -1){
+          db[key].push(remote);
+          markDirty(key, remote.id);
+          mergedCount++;
+        } else {
+          const local = db[key][idx];
+          if(!local.updated_at || new Date(remote.updated_at || 0) > new Date(local.updated_at)){
+            db[key][idx] = remote;
+            markDirty(key, remote.id);
+            mergedCount++;
+          }
+        }
+      });
+    });
+    saveLocal();
+    renderAll();
+    toast(mergedCount + ' record' + (mergedCount===1?'':'s') + ' merged in');
+    document.getElementById('dataJsonInput').value = '';
+  };
+  reader.readAsText(file);
 }
 
 /* =========================================================
