@@ -1,0 +1,1706 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Oasis — Family Travel Planner</title>
+<link rel="manifest" href="./oasis-manifest.json">
+<meta name="theme-color" content="#0E8A8A">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Oasis">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500&family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper: #FBF3E1;
+    --paper-dark: #F5E7C6;
+    --paper-darker: #E9D39E;
+    --ink: #1B4B47;
+    --ink-soft: #5A8481;
+    --brass: #E3A73D;
+    --brass-soft: #F2C978;
+    --oxblood: #E8623E;
+    --sea: #0E8A8A;
+    --sea-soft: #4FB3AE;
+    --card-shadow: 0 1px 0 rgba(27,75,71,0.06), 0 6px 18px rgba(14,138,138,0.10);
+    --radius: 14px;
+  }
+  *{ box-sizing: border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    background: var(--paper);
+    background-image:
+      radial-gradient(circle at 8% 0%, rgba(232,98,62,0.08), transparent 42%),
+      radial-gradient(circle at 95% 95%, rgba(14,138,138,0.10), transparent 45%);
+    color: var(--ink);
+    font-family: 'Quicksand', sans-serif;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1,h2,h3,h4{
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin: 0;
+  }
+  .mono{ font-family:'Quicksand', sans-serif; font-weight:700; letter-spacing:0.02em; }
+  button{ font-family: inherit; cursor: pointer; }
+  input, select, textarea{ font-family: inherit; }
+  ::selection{ background: var(--brass-soft); color: var(--ink); }
+
+  /* focus visibility */
+  a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible{
+    outline: 2px solid var(--sea);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    *{ animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+  }
+
+  /* ---------- Gate screen ---------- */
+  #gate{
+    min-height: 100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding: 24px;
+  }
+  .gate-card{
+    background: var(--paper-dark);
+    border: 1px solid var(--paper-darker);
+    border-radius: 16px;
+    padding: 40px 32px;
+    max-width: 420px;
+    width: 100%;
+    box-shadow: var(--card-shadow);
+    text-align: center;
+    position: relative;
+  }
+  .gate-wordmark{
+    font-family: 'Quicksand', sans-serif;
+    font-weight: 700;
+    font-size: 2.35rem;
+    letter-spacing: 0.01em;
+    color: var(--sea);
+    margin-bottom: 4px;
+  }
+  .gate-sub{
+    color: var(--ink-soft);
+    font-size: 0.95rem;
+    margin-bottom: 28px;
+  }
+  .gate-compass{
+    width: 60px; height: 60px;
+    margin: 0 auto 18px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, var(--brass-soft), var(--brass) 75%);
+    box-shadow: 0 0 0 6px rgba(227,167,61,0.16), 0 10px 22px rgba(232,98,62,0.25);
+    position: relative;
+  }
+  .field-label{
+    display:block;
+    text-align:left;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--ink-soft);
+    margin-bottom: 6px;
+  }
+  .gate-card input{
+    width: 100%;
+    padding: 12px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--paper-darker);
+    background: var(--paper);
+    color: var(--ink);
+    font-size: 1rem;
+    margin-bottom: 14px;
+  }
+  .btn{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    padding: 11px 20px;
+    border-radius: 8px;
+    border: none;
+    font-weight: 600;
+    font-size: 0.95rem;
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+  }
+  .btn:active{ transform: translateY(1px); }
+  .btn-primary{ background: var(--sea); color: #F7F2E4; }
+  .btn-primary:hover{ background: var(--sea-soft); }
+  .btn-ghost{ background: transparent; color: var(--ink); border: 1px solid var(--paper-darker); }
+  .btn-ghost:hover{ background: var(--paper); }
+  .btn-danger{ background: transparent; color: var(--oxblood); border: 1px solid var(--oxblood); }
+  .btn-block{ width: 100%; }
+  .btn-sm{ padding: 6px 12px; font-size: 0.82rem; }
+
+  .gate-divider{
+    display:flex; align-items:center; gap:10px;
+    margin: 18px 0;
+    color: var(--ink-soft);
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .gate-divider::before, .gate-divider::after{
+    content:""; flex:1; height:1px; background: var(--paper-darker);
+  }
+
+  /* ---------- App shell ---------- */
+  #app{ display:none; min-height: 100vh; }
+  .topbar{
+    position: sticky; top:0; z-index: 20;
+    background: var(--paper);
+    border-bottom: 1px solid var(--paper-darker);
+    padding: 14px 20px;
+    display:flex; align-items:center; justify-content:space-between;
+    gap: 12px;
+  }
+  .wordmark{
+    font-family: 'Quicksand', sans-serif;
+    font-weight: 700;
+    font-size: 1.3rem;
+    letter-spacing: 0.01em;
+    color: var(--sea);
+    display:flex; align-items:baseline; gap:8px;
+  }
+  .code-chip{
+    font-family:'Quicksand', sans-serif; font-weight:700;
+    font-size: 0.78rem;
+    background: var(--paper-dark);
+    border: 1px solid var(--paper-darker);
+    padding: 4px 10px;
+    border-radius: 20px;
+    color: var(--ink-soft);
+    display:flex; align-items:center; gap:6px;
+  }
+  .sync-dot{
+    width:7px; height:7px; border-radius:50%;
+    background: var(--sea-soft);
+  }
+  .sync-dot.syncing{ background: var(--brass); animation: pulse 1s ease-in-out infinite; }
+  .sync-dot.err{ background: var(--oxblood); }
+  @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:0.35;} }
+
+  .tabs{
+    display:flex; gap: 4px;
+    padding: 10px 16px 0;
+    overflow-x:auto;
+    background: var(--paper);
+    border-bottom: 1px solid var(--paper-darker);
+  }
+  .tab-btn{
+    background: transparent;
+    border: none;
+    padding: 10px 16px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--ink-soft);
+    border-bottom: 3px solid transparent;
+    white-space: nowrap;
+  }
+  .tab-btn.active{ color: var(--ink); border-bottom-color: var(--oxblood); }
+
+  main{ max-width: 900px; margin: 0 auto; padding: 20px 16px 80px; }
+  .view{ display:none; }
+  .view.active{ display:block; }
+  .subview{ display:none; }
+  .subview.active{ display:block; }
+
+  .section-head{
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom: 16px;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .section-head h2{ font-size: 1.5rem; }
+  .section-sub{ color: var(--ink-soft); font-size: 0.88rem; margin-top:2px; }
+
+  .card{
+    background: var(--paper-dark);
+    border: 1px solid var(--paper-darker);
+    border-radius: var(--radius);
+    box-shadow: var(--card-shadow);
+    padding: 18px;
+    margin-bottom: 14px;
+  }
+  .empty-state{
+    text-align:center;
+    padding: 40px 20px;
+    color: var(--ink-soft);
+    border: 1px dashed var(--paper-darker);
+    border-radius: var(--radius);
+  }
+  .empty-state h3{ color: var(--ink); margin-bottom: 6px; font-size:1.1rem; }
+
+  /* Trip card */
+  .trip-card{
+    position: relative;
+    display:flex; justify-content:space-between; align-items:flex-start;
+    gap: 14px;
+    cursor: pointer;
+  }
+  .trip-card:hover{ border-color: var(--brass-soft); }
+  .trip-title{ font-size: 1.15rem; margin-bottom: 4px; }
+  .trip-meta{ color: var(--ink-soft); font-size: 0.85rem; }
+  .status-pill{
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-weight: 700;
+    white-space:nowrap;
+  }
+  .status-upcoming{ background: #F0DFC2; color: var(--brass); }
+  .status-active{ background: #E3CEC7; color: var(--oxblood); }
+  .status-past{ background: transparent; color: var(--ink-soft); border: 1px solid var(--paper-darker); }
+
+  .filter-chips{ display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap; }
+  .filter-chip{
+    background: var(--paper-dark);
+    border: 1px solid var(--paper-darker);
+    color: var(--ink-soft);
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 0.82rem;
+    font-weight: 600;
+  }
+  .filter-chip.active{ background: var(--sea); color: #F7F2E4; border-color: var(--sea); }
+
+  .glance-countdown{
+    background: var(--paper-dark);
+    border: 1px solid var(--paper-darker);
+    border-left: 4px solid var(--oxblood);
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    font-family: 'Fraunces', serif;
+    font-size: 1.05rem;
+    color: var(--ink);
+  }
+  .glance-countdown .num{ color: var(--oxblood); font-weight:700; }
+
+  .trip-emoji{ font-size: 1.9rem; line-height:1; margin-right:10px; }
+  .emoji-grid{
+    display:grid; grid-template-columns: repeat(7, 1fr); gap:6px;
+    max-height: 180px; overflow-y:auto;
+    background: var(--paper); border:1px solid var(--paper-darker); border-radius:8px;
+    padding: 8px; margin-bottom:12px;
+  }
+  .emoji-opt{
+    background:none; border:1px solid transparent; border-radius:6px;
+    font-size:1.3rem; padding:4px; text-align:center;
+  }
+  .emoji-opt.selected{ border-color: var(--sea); background: var(--paper-dark); }
+
+  /* Sunburst badge — signature element for a completed ("Past") trip */
+  .sunbadge{
+    position: absolute;
+    top: 8px; right: 12px;
+    width: 82px; height: 82px;
+    transform: rotate(-7deg);
+    display:flex; align-items:center; justify-content:center;
+    pointer-events: none;
+  }
+  .sunbadge::before{
+    content:"";
+    position:absolute; inset:0;
+    border-radius: 50%;
+    background: repeating-conic-gradient(var(--oxblood) 0deg 7deg, transparent 7deg 18deg);
+    opacity: 0.9;
+  }
+  .sunbadge-inner{
+    position: relative;
+    width: 54px; height: 54px;
+    border-radius: 50%;
+    background: var(--paper-dark);
+    border: 2px solid var(--oxblood);
+    color: var(--oxblood);
+    display:flex; align-items:center; justify-content:center;
+    text-align:center;
+    font-family: 'Fraunces', serif;
+    line-height: 1.05;
+  }
+  .sunbadge-inner .s1{ font-size: 0.5rem; letter-spacing: 0.07em; text-transform:uppercase; font-family:'Quicksand',sans-serif; font-weight:700; }
+  .sunbadge-inner .s2{ font-size: 0.62rem; font-weight:700; }
+
+  input[type=text], input[type=number], input[type=date], select, textarea{
+    width:100%;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--paper-darker);
+    background: var(--paper);
+    color: var(--ink);
+    font-size: 0.92rem;
+  }
+  textarea{ min-height: 70px; resize: vertical; }
+  label{ display:block; font-size: 0.78rem; text-transform:uppercase; letter-spacing:0.05em; color: var(--ink-soft); margin-bottom:5px; }
+  .form-row{ margin-bottom: 12px; }
+  .form-grid{ display:grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 520px){ .form-grid{ grid-template-columns: 1fr; } }
+
+  .modal-backdrop{
+    display:none;
+    position: fixed; inset:0;
+    background: rgba(38,54,58,0.45);
+    z-index: 50;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 30px 16px;
+    overflow-y: auto;
+  }
+  .modal-backdrop.active{ display:flex; }
+  .modal{
+    background: var(--paper);
+    border-radius: 14px;
+    padding: 24px;
+    max-width: 480px;
+    width: 100%;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.25);
+  }
+  .modal h3{ font-size:1.2rem; margin-bottom: 16px; }
+  .modal-actions{ display:flex; gap:10px; justify-content:flex-end; margin-top:18px; }
+
+  .fab{
+    position: fixed;
+    bottom: 24px; right: 24px;
+    width: 56px; height:56px;
+    border-radius: 50%;
+    background: var(--oxblood);
+    color: #F7F2E4;
+    font-size: 1.6rem;
+    border:none;
+    box-shadow: 0 8px 20px rgba(140,59,46,0.4);
+    z-index: 15;
+  }
+
+  /* Back link */
+  .back-link{
+    display:inline-flex; align-items:center; gap:6px;
+    color: var(--ink-soft);
+    font-size: 0.85rem;
+    margin-bottom: 14px;
+    background:none; border:none; padding:0;
+  }
+  .back-link:hover{ color: var(--ink); }
+
+  /* Trip detail sub-tabs */
+  .subtabs{ display:flex; gap:4px; margin-bottom:16px; border-bottom: 1px solid var(--paper-darker); }
+  .subtab-btn{
+    background:none; border:none; padding: 8px 14px;
+    font-size:0.85rem; font-weight:600; color: var(--ink-soft);
+    border-bottom: 2px solid transparent;
+  }
+  .subtab-btn.active{ color: var(--sea); border-bottom-color: var(--sea); }
+
+  /* At a glance dashboard */
+  .glance-grid{ display:grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap:14px; }
+  .glance-day{
+    background: var(--paper-dark);
+    border: 1px solid var(--paper-darker);
+    border-radius: var(--radius);
+    padding: 14px;
+    box-shadow: var(--card-shadow);
+  }
+  .glance-day-head{
+    display:flex; align-items:baseline; gap:8px;
+    margin-bottom: 10px; padding-bottom:8px;
+    border-bottom: 2px solid var(--sea-soft);
+  }
+  .glance-weekday{ font-family:'Fraunces', serif; font-weight:600; font-size:1.05rem; color: var(--sea); }
+  .glance-date{ font-size:0.78rem; color: var(--ink-soft); }
+  .glance-item{ display:flex; gap:8px; padding: 5px 0; font-size:0.86rem; }
+  .glance-time{ min-width:64px; color: var(--brass); font-family:'Quicksand',sans-serif; font-weight:700; font-size:0.78rem; padding-top:1px; }
+  .glance-title{ flex:1; }
+  .glance-loc{ color: var(--ink-soft); font-size:0.8rem; }
+
+  /* Itinerary timeline */
+  .day-group{ margin-bottom: 22px; }
+  .day-heading{
+    font-family:'Quicksand', sans-serif; font-weight:700;
+    font-size: 0.82rem;
+    color: var(--brass);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 10px;
+    padding-bottom:6px;
+    border-bottom: 1px dashed var(--paper-darker);
+  }
+  .itin-item{ display:flex; gap:12px; padding: 8px 0; }
+  .itin-time{ font-family:'Quicksand', sans-serif; font-weight:700; font-size:0.8rem; color: var(--ink-soft); min-width: 68px; padding-top:2px; }
+  .itin-body{ flex:1; }
+  .itin-title{ font-weight:600; }
+  .itin-loc{ color: var(--sea); font-size:0.82rem; }
+  .itin-notes{ color: var(--ink-soft); font-size:0.85rem; margin-top:2px; }
+  .item-actions{ display:flex; gap:6px; }
+  .icon-btn{
+    background:none; border:none; color: var(--ink-soft); font-size: 0.95rem; padding:2px 6px;
+  }
+  .icon-btn:hover{ color: var(--oxblood); }
+
+  /* Budget */
+  .total-bar{
+    display:flex; justify-content:space-between; align-items:center;
+    padding: 14px 0 4px; margin-top:6px; border-top: 2px solid var(--ink);
+    font-family:'Fraunces', serif; font-size:1.1rem;
+  }
+
+  /* Packing */
+  .pack-cat{ margin-bottom:18px; }
+  .pack-cat-title{ font-size:0.85rem; font-weight:700; color: var(--sea); margin-bottom:8px; text-transform:uppercase; letter-spacing:0.04em; }
+  .pack-item{ display:flex; align-items:center; gap:10px; padding: 7px 0; }
+  .pack-item input[type=checkbox]{ width:18px; height:18px; accent-color: var(--sea); }
+  .pack-item.checked .pack-name{ text-decoration: line-through; color: var(--ink-soft); }
+  .pack-name{ flex:1; }
+  .progress-track{ height:6px; background:var(--paper); border-radius:4px; overflow:hidden; margin-bottom:16px; }
+  .progress-fill{ height:100%; background: var(--sea); transition: width 0.3s ease; }
+
+  /* Favorites / rankings */
+  .rank-row{ display:flex; align-items:center; gap:14px; padding: 12px 0; border-bottom:1px solid var(--paper-darker); }
+  .rank-row:last-child{ border-bottom:none; }
+  .rank-num{ font-family:'Fraunces', serif; font-size:1.3rem; color: var(--brass); min-width: 30px; }
+  .rank-score{
+    font-family:'Quicksand', sans-serif; font-weight:700;
+    background: var(--sea); color:#F7F2E4;
+    border-radius:6px; padding:4px 8px; font-size:0.85rem; min-width:40px; text-align:center;
+  }
+
+  /* Ideas */
+  .idea-card{ position:relative; }
+  .priority-badge{
+    font-size:0.68rem; text-transform:uppercase; letter-spacing:0.04em;
+    padding:3px 9px; border-radius: 20px; font-weight:700;
+  }
+  .priority-someday{ background:#E4DBC6; color:var(--ink-soft); }
+  .priority-want-to-go{ background:#D9E4E0; color:var(--sea); }
+  .priority-high-priority{ background:#E3CEC7; color:var(--oxblood); }
+  .tag-chip{ font-size:0.72rem; background:var(--paper); border:1px solid var(--paper-darker); padding:2px 8px; border-radius:12px; color:var(--ink-soft); margin-right:5px; }
+
+  /* Long-term schedule */
+  .year-group{ margin-bottom: 24px; }
+  .year-heading{ font-size:1.6rem; color: var(--ink); margin-bottom:10px; display:flex; align-items:baseline; gap:10px; }
+  .year-heading .count{ font-size:0.8rem; color: var(--ink-soft); font-family:'Quicksand'; font-weight:400; }
+  .season-tag{
+    font-family:'Quicksand', sans-serif; font-weight:700; font-size:0.72rem; text-transform:uppercase;
+    color: var(--brass); letter-spacing:0.05em;
+  }
+
+  .toast{
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: var(--ink); color: var(--paper);
+    padding: 10px 20px; border-radius: 8px; font-size: 0.85rem;
+    z-index: 100; opacity:0; pointer-events:none; transition: opacity 0.25s ease;
+  }
+  .toast.show{ opacity:1; }
+</style>
+</head>
+<body>
+
+<!-- ============ SYNC GATE ============ -->
+<div id="gate">
+  <div class="gate-card">
+    <div class="gate-compass"></div>
+    <h1 class="gate-wordmark">Oasis</h1>
+    <div class="gate-sub">Your family's getaway hub — trips, budgets, packing &amp; someday-lists, all in one place.</div>
+
+    <div id="gate-join">
+      <label class="field-label" for="join-code">Family sync code</label>
+      <input type="text" id="join-code" placeholder="e.g. leavitt-getaways" autocomplete="off">
+      <button class="btn btn-primary btn-block" onclick="joinWithCode()">Open Oasis</button>
+
+      <div class="gate-divider">or</div>
+      <button class="btn btn-ghost btn-block" onclick="createNewCode()">Start a brand new sync code</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ APP SHELL ============ -->
+<div id="app">
+  <div class="topbar">
+    <div class="wordmark">Oasis</div>
+    <div class="code-chip">
+      <span class="sync-dot" id="syncDot"></span>
+      <span id="codeLabel" class="mono"></span>
+      <button class="icon-btn" title="Switch family code" onclick="switchCode()" style="margin-left:4px;">⇄</button>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active" data-view="glance" onclick="switchTab('glance')">At a Glance</button>
+    <button class="tab-btn" data-view="trips" onclick="switchTab('trips')">Trips</button>
+    <button class="tab-btn" data-view="ideas" onclick="switchTab('ideas')">Ideas</button>
+    <button class="tab-btn" data-view="longterm" onclick="switchTab('longterm')">Long-Term</button>
+    <button class="tab-btn" data-view="favorites" onclick="switchTab('favorites')">Favorites</button>
+    <button class="tab-btn" data-view="packingTemplates" onclick="switchTab('packingTemplates')">Packing Lists</button>
+  </div>
+
+  <main>
+    <!-- ===== AT A GLANCE VIEW ===== -->
+    <div class="view active" id="view-glance">
+      <div class="section-head">
+        <div>
+          <h2>At a glance</h2>
+          <div class="section-sub">A quick, simplified look at a trip's day-by-day plan.</div>
+        </div>
+        <select id="glanceTripSelect" onchange="renderGlance()" style="max-width:220px;"></select>
+      </div>
+      <div id="glanceCountdown"></div>
+      <div id="glanceContent"></div>
+    </div>
+
+    <!-- ===== TRIPS LIST VIEW ===== -->
+    <div class="view" id="view-trips">
+      <div class="section-head">
+        <div>
+          <h2>Trips</h2>
+          <div class="section-sub">Plans, upcoming departures, and the ones already stamped.</div>
+        </div>
+        <button class="btn btn-primary" onclick="openTripModal()">+ New trip</button>
+      </div>
+      <div class="filter-chips" id="tripFilterChips"></div>
+      <div id="tripsList"></div>
+    </div>
+
+    <!-- ===== TRIP DETAIL VIEW ===== -->
+    <div class="view" id="view-tripDetail">
+      <button class="back-link" onclick="switchTab('trips')">← Back to trips</button>
+      <div class="section-head">
+        <div>
+          <h2 id="tdName"></h2>
+          <div class="section-sub" id="tdMeta"></div>
+        </div>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <span class="status-pill" id="tdStatusPill"></span>
+          <button class="btn btn-ghost btn-sm" onclick="editCurrentTrip()">Edit</button>
+        </div>
+      </div>
+
+      <div class="subtabs">
+        <button class="subtab-btn active" data-sub="itinerary" onclick="switchSubtab('itinerary')">Itinerary</button>
+        <button class="subtab-btn" data-sub="budget" onclick="switchSubtab('budget')">Budget</button>
+        <button class="subtab-btn" data-sub="packing" onclick="switchSubtab('packing')">Packing</button>
+      </div>
+
+      <div class="subview active" id="sub-itinerary">
+        <div class="section-head" style="margin-bottom:10px;">
+          <div class="section-sub">Day-by-day agenda — set a time and it'll sort itself</div>
+          <button class="btn btn-ghost btn-sm" onclick="openItinItemModal()">+ Add item</button>
+        </div>
+        <div id="itineraryList"></div>
+      </div>
+
+      <div class="subview" id="sub-budget">
+        <div class="section-head" style="margin-bottom:10px;">
+          <div class="section-sub">High-level only — line items live in your family budget</div>
+        </div>
+        <div class="card">
+          <div class="form-grid">
+            <div class="form-row">
+              <label>Trip budget</label>
+              <input type="number" step="0.01" id="budgetAmount" placeholder="0.00" onchange="saveBudgetFields()">
+            </div>
+            <div class="form-row">
+              <label>Actual total cost</label>
+              <input type="number" step="0.01" id="actualCost" placeholder="0.00" onchange="saveBudgetFields()">
+            </div>
+          </div>
+          <div class="total-bar" id="budgetVarianceRow" style="display:none;">
+            <span id="budgetVarianceLabel"></span>
+            <span id="budgetVarianceAmt" class="mono"></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="subview" id="sub-packing">
+        <div class="section-head" style="margin-bottom:10px;">
+          <div class="section-sub">Shared list — everyone can check off</div>
+          <div style="display:flex; gap:8px;">
+            <button class="btn btn-ghost btn-sm" onclick="openTemplateModal()">Use template</button>
+            <button class="btn btn-ghost btn-sm" onclick="openPackItemModal()">+ Add item</button>
+          </div>
+        </div>
+        <div class="progress-track"><div class="progress-fill" id="packProgress" style="width:0%"></div></div>
+        <div id="packingList"></div>
+      </div>
+    </div>
+
+    <!-- ===== IDEAS VIEW ===== -->
+    <div class="view" id="view-ideas">
+      <div class="section-head">
+        <div>
+          <h2>Trip ideas</h2>
+          <div class="section-sub">The someday list — dream first, plan later.</div>
+        </div>
+        <button class="btn btn-primary" onclick="openIdeaModal()">+ Add idea</button>
+      </div>
+      <div id="ideasList"></div>
+    </div>
+
+    <!-- ===== LONG-TERM VIEW ===== -->
+    <div class="view" id="view-longterm">
+      <div class="section-head">
+        <div>
+          <h2>Long-term schedule</h2>
+          <div class="section-sub">High-level earmarks for years ahead.</div>
+        </div>
+        <button class="btn btn-primary" onclick="openScheduleModal()">+ Earmark a trip</button>
+      </div>
+      <div id="scheduleList"></div>
+    </div>
+
+    <!-- ===== FAVORITES VIEW ===== -->
+    <div class="view" id="view-favorites">
+      <div class="section-head">
+        <div>
+          <h2>Favorite destinations</h2>
+          <div class="section-sub">Ranked, 1–10, by the whole family.</div>
+        </div>
+        <button class="btn btn-primary" onclick="openRankingModal()">+ Rank a destination</button>
+      </div>
+      <div class="card" id="rankingsCard"><div id="rankingsList"></div></div>
+    </div>
+
+    <!-- ===== PACKING LIST TEMPLATES VIEW ===== -->
+    <div class="view" id="view-packingTemplates">
+      <div class="section-head">
+        <div>
+          <h2>Packing lists</h2>
+          <div class="section-sub">Build reusable templates — apply them to any trip in one tap.</div>
+        </div>
+        <button class="btn btn-primary" onclick="openTemplateEditModal()">+ New template</button>
+      </div>
+      <div id="templatesList"></div>
+    </div>
+  </main>
+</div>
+
+<div class="modal-backdrop" id="modalBackdrop"><div class="modal" id="modalContent"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* =========================================================
+   OASIS — config & sync engine
+   Shared Supabase project, isolation via family_code.
+   Fill in SUPABASE_ANON_KEY below before using.
+   ========================================================= */
+const SUPABASE_URL = 'https://ctxnyfgdiugzhskumqpm.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN0eG55ZmdkaXVnemhza3VtcXBtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMxODUxNzgsImV4cCI6MjA5ODc2MTE3OH0.waXx4gHFKwRJWNloGRhIpe7TH5UVn1N_jPLgaAn2oEY'; // <-- paste your project's anon/public key here
+
+const TABLES = {
+  trips: 'oasis_trips',
+  itinerary: 'oasis_itinerary_items',
+  packing: 'oasis_packing_items',
+  templates: 'oasis_packing_templates',
+  rankings: 'oasis_destination_rankings',
+  ideas: 'oasis_trip_ideas',
+  schedule: 'oasis_long_term_schedule'
+};
+
+let familyCode = localStorage.getItem('oasis_active_code') || '';
+let db = { trips:[], itinerary:[], packing:[], templates:[], rankings:[], ideas:[], schedule:[] };
+let dirty = { trips:new Set(), itinerary:new Set(), packing:new Set(), templates:new Set(), rankings:new Set(), ideas:new Set(), schedule:new Set() };
+let currentTripId = null;
+let pushTimer = null;
+let pullTimer = null;
+let retryTimer = null;
+
+function uid(){ return (crypto.randomUUID ? crypto.randomUUID() : 'id-' + Date.now() + '-' + Math.random().toString(16).slice(2)); }
+function nowIso(){ return new Date().toISOString(); }
+function localKey(){ return 'oasis_data_' + familyCode; }
+
+function loadLocal(){
+  try{
+    const raw = localStorage.getItem(localKey());
+    if(raw){ db = Object.assign(db, JSON.parse(raw)); }
+  }catch(e){ console.error('Oasis: local load failed', e); }
+}
+function saveLocal(){
+  try{ localStorage.setItem(localKey(), JSON.stringify(db)); }
+  catch(e){ console.error('Oasis: local save failed', e); }
+}
+
+function markDirty(table, id){
+  dirty[table].add(id);
+  saveLocal();
+  schedulePush();
+}
+
+function schedulePush(){
+  clearTimeout(pushTimer);
+  pushTimer = setTimeout(pushAll, 800);
+}
+
+function setSyncStatus(state){
+  const dot = document.getElementById('syncDot');
+  if(!dot) return;
+  dot.classList.remove('syncing','err');
+  if(state === 'syncing') dot.classList.add('syncing');
+  if(state === 'err') dot.classList.add('err');
+}
+
+async function supaFetch(path, options={}){
+  const headers = Object.assign({
+    'apikey': SUPABASE_ANON_KEY,
+    'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+    'Content-Type': 'application/json'
+  }, options.headers || {});
+  return fetch(SUPABASE_URL + path, Object.assign({}, options, { headers }));
+}
+
+async function pushAll(){
+  if(!familyCode || SUPABASE_ANON_KEY === 'YOUR_SUPABASE_ANON_KEY') return;
+  let anyDirty = Object.values(dirty).some(s => s.size > 0);
+  if(!anyDirty) return;
+  setSyncStatus('syncing');
+  let hadError = false;
+  for(const key of Object.keys(TABLES)){
+    const ids = Array.from(dirty[key]);
+    if(ids.length === 0) continue;
+    const rows = db[key].filter(r => ids.includes(r.id) && !r._deleted);
+    if(rows.length){
+      try{
+        const res = await supaFetch('/rest/v1/' + TABLES[key] + '?on_conflict=id', {
+          method: 'POST',
+          headers: { 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+          body: JSON.stringify(rows)
+        });
+        if(res.ok){ ids.forEach(id => dirty[key].delete(id)); }
+        else { hadError = true; }
+      }catch(e){ hadError = true; }
+    } else {
+      ids.forEach(id => dirty[key].delete(id));
+    }
+  }
+  saveLocal();
+  setSyncStatus(hadError ? 'err' : 'idle');
+}
+
+async function pullAll(){
+  if(!familyCode || SUPABASE_ANON_KEY === 'YOUR_SUPABASE_ANON_KEY') return;
+  setSyncStatus('syncing');
+  try{
+    for(const key of Object.keys(TABLES)){
+      const res = await supaFetch('/rest/v1/' + TABLES[key] + '?family_code=eq.' + encodeURIComponent(familyCode) + '&order=updated_at.asc');
+      if(!res.ok) continue;
+      const rows = await res.json();
+      rows.forEach(remote => {
+        if(dirty[key].has(remote.id)) return; // local pending change wins for now
+        const idx = db[key].findIndex(r => r.id === remote.id);
+        if(idx === -1){ db[key].push(remote); }
+        else {
+          const local = db[key][idx];
+          if(!local.updated_at || new Date(remote.updated_at) >= new Date(local.updated_at)){
+            db[key][idx] = remote;
+          }
+        }
+      });
+    }
+    saveLocal();
+    setSyncStatus('idle');
+    renderCurrentView();
+  }catch(e){ setSyncStatus('err'); }
+}
+
+function startSyncLoops(){
+  clearInterval(pullTimer);
+  clearInterval(retryTimer);
+  pullTimer = setInterval(pullAll, 20000);
+  retryTimer = setInterval(pushAll, 15000); // catches anything that failed to push earlier
+  window.addEventListener('focus', pullAll);
+  window.addEventListener('online', pushAll);
+  pullAll();
+}
+
+/* =========================================================
+   Gate / family code
+   ========================================================= */
+function normalizeCode(c){
+  return (c || '').trim().toLowerCase().replace(/\s+/g, '-');
+}
+function joinWithCode(){
+  const val = normalizeCode(document.getElementById('join-code').value);
+  if(!val){ toast('Enter a sync code first'); return; }
+  enterApp(val);
+}
+function createNewCode(){
+  const suggestion = prompt('Name your family sync code (share this with everyone who should see the trips):', 'leavitt-getaways');
+  if(!suggestion) return;
+  enterApp(normalizeCode(suggestion));
+  seedDefaultTemplates();
+}
+function switchCode(){
+  if(confirm('Switch to a different family sync code? Your current data stays saved on this device.')){
+    document.getElementById('gate').style.display = 'flex';
+    document.getElementById('app').style.display = 'none';
+    clearInterval(pullTimer);
+    clearInterval(retryTimer);
+    window.removeEventListener('focus', pullAll);
+    window.removeEventListener('online', pushAll);
+  }
+}
+function enterApp(code){
+  familyCode = normalizeCode(code);
+  localStorage.setItem('oasis_active_code', familyCode);
+  loadLocal();
+  document.getElementById('gate').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  document.getElementById('codeLabel').textContent = familyCode;
+  renderAll();
+  startSyncLoops();
+}
+function seedDefaultTemplates(){
+  if(db.templates.length > 0) return;
+  const defaults = [
+    { name: 'Beach trip', items: [
+      {name:'Swimsuits', category:'Clothing'},{name:'Sunscreen', category:'Toiletries'},
+      {name:'Sunglasses', category:'General'},{name:'Beach towels', category:'General'},
+      {name:'Flip flops', category:'Clothing'},{name:'Phone charger', category:'Electronics'},
+      {name:'Passports/IDs', category:'Documents'}
+    ]},
+    { name: 'Ski trip', items: [
+      {name:'Ski jacket', category:'Clothing'},{name:'Thermal base layers', category:'Clothing'},
+      {name:'Gloves', category:'Clothing'},{name:'Goggles', category:'General'},
+      {name:'Wool socks', category:'Clothing'},{name:'Chapstick', category:'Toiletries'},
+      {name:'Phone charger', category:'Electronics'}
+    ]}
+  ];
+  defaults.forEach(t => {
+    const row = { id: uid(), family_code: familyCode, name: t.name, items: t.items, created_at: nowIso(), updated_at: nowIso() };
+    db.templates.push(row);
+    markDirty('templates', row.id);
+  });
+}
+
+/* =========================================================
+   Tabs
+   ========================================================= */
+function switchTab(view){
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('view-' + view).classList.add('active');
+  const btn = document.querySelector('.tab-btn[data-view="' + view + '"]');
+  if(btn) btn.classList.add('active');
+  renderCurrentView(view);
+}
+function currentView(){
+  const active = document.querySelector('.view.active');
+  return active ? active.id.replace('view-','') : 'glance';
+}
+function renderCurrentView(view){
+  view = view || currentView();
+  if(view === 'glance') renderGlance();
+  else if(view === 'trips') renderTrips();
+  else if(view === 'tripDetail') renderTripDetail();
+  else if(view === 'ideas') renderIdeas();
+  else if(view === 'longterm') renderSchedule();
+  else if(view === 'favorites') renderRankings();
+  else if(view === 'packingTemplates') renderTemplatesList();
+}
+function renderAll(){ renderGlance(); renderTrips(); renderIdeas(); renderSchedule(); renderRankings(); renderTemplatesList(); }
+
+function switchSubtab(sub){
+  document.querySelectorAll('.subview').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.subtab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('sub-' + sub).classList.add('active');
+  document.querySelector('.subtab-btn[data-sub="' + sub + '"]').classList.add('active');
+  if(sub === 'itinerary') renderItinerary();
+  else if(sub === 'budget') renderBudget();
+  else if(sub === 'packing') renderPacking();
+}
+
+/* =========================================================
+   Modal helpers
+   ========================================================= */
+function openModal(html){
+  document.getElementById('modalContent').innerHTML = html;
+  document.getElementById('modalBackdrop').classList.add('active');
+}
+function closeModal(){
+  document.getElementById('modalBackdrop').classList.remove('active');
+}
+document.getElementById('modalBackdrop').addEventListener('click', (e) => {
+  if(e.target.id === 'modalBackdrop') closeModal();
+});
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+function esc(s){ return (s || '').toString().replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function fmtDate(d){ if(!d) return ''; const dt = new Date(d + 'T00:00:00'); return dt.toLocaleDateString(undefined, {month:'short', day:'numeric', year:'numeric'}); }
+function fmtMoney(n){ return '$' + Number(n || 0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2}); }
+function fmtTime(t){
+  if(!t) return '';
+  const parts = t.split(':');
+  let h = parseInt(parts[0], 10);
+  const m = parts[1] || '00';
+  const period = h >= 12 ? 'PM' : 'AM';
+  h = h % 12; if(h === 0) h = 12;
+  return h + ':' + m + ' ' + period;
+}
+
+/* =========================================================
+   TRIPS
+   ========================================================= */
+const STATUS_LABELS = { upcoming:'Upcoming', active:'Active', past:'Past' };
+const EMOJI_OPTIONS = [
+  '🏖️','🏝️','🌴','🌊','🏔️','⛰️','🗻','🏕️','🏞️','🌋','🏜️','🏙️','🌆','🗽',
+  '🗼','🕌','⛩️','🏰','🏯','🎡','🎢','🛳️','⛴️','🚢','✈️','🛩️','🚁','🚗',
+  '🚌','🚂','🚆','⛷️','🏂','🏄','🤿','🥾','🎒','🧳','📸','🗺️','🧭','🍹',
+  '🍕','🎿','🐫','🦁','🐘','🌅','🌄','🎣'
+];
+let tripFilter = 'all';
+
+function computeTripStatus(t){
+  if(!t.start_date) return 'upcoming';
+  const today = new Date(); today.setHours(0,0,0,0);
+  const start = new Date(t.start_date + 'T00:00:00');
+  const end = t.end_date ? new Date(t.end_date + 'T00:00:00') : start;
+  if(today < start) return 'upcoming';
+  if(today > end) return 'past';
+  return 'active';
+}
+
+function renderTripFilterChips(){
+  const wrap = document.getElementById('tripFilterChips');
+  const chips = [ ['all','All'], ['upcoming','Upcoming'], ['active','Active'], ['past','Past'] ];
+  wrap.innerHTML = chips.map(([key,label]) => `<button class="filter-chip ${tripFilter===key?'active':''}" onclick="setTripFilter('${key}')">${label}</button>`).join('');
+}
+function setTripFilter(key){
+  tripFilter = key;
+  renderTrips();
+}
+
+function renderTrips(){
+  renderTripFilterChips();
+  const list = document.getElementById('tripsList');
+  const order = { active:0, upcoming:1, past:2 };
+  let trips = [...db.trips].filter(t => !t._deleted);
+  if(tripFilter !== 'all'){ trips = trips.filter(t => computeTripStatus(t) === tripFilter); }
+  trips.sort((a,b) => (order[computeTripStatus(a)]??3) - (order[computeTripStatus(b)]??3) || new Date(a.start_date||0) - new Date(b.start_date||0));
+  if(trips.length === 0){
+    list.innerHTML = `<div class="empty-state"><h3>No trips here</h3><p>${tripFilter==='all' ? 'Start with an idea, or plan your next departure.' : 'Nothing in this filter yet.'}</p></div>`;
+    return;
+  }
+  list.innerHTML = trips.map(t => {
+    const status = computeTripStatus(t);
+    return `
+    <div class="card trip-card" onclick="openTripDetail('${t.id}')">
+      ${status === 'past' ? `<div class="sunbadge"><div class="sunbadge-inner"><div class="s1">Oasis</div><div class="s2">${esc(t.destination || t.name).slice(0,14)}</div><div class="s1">${t.end_date ? new Date(t.end_date).getFullYear() : ''}</div></div></div>` : ''}
+      <div style="display:flex; align-items:flex-start;">
+        <span class="trip-emoji">${t.emoji || '🧳'}</span>
+        <div>
+          <div class="trip-title">${esc(t.name)}</div>
+          <div class="trip-meta">${esc(t.destination || '')}${t.start_date ? ' · ' + fmtDate(t.start_date) + (t.end_date ? ' – ' + fmtDate(t.end_date) : '') : ''}</div>
+        </div>
+      </div>
+      <span class="status-pill status-${status}">${STATUS_LABELS[status]}</span>
+    </div>
+  `;
+  }).join('');
+}
+
+let selectedTripEmoji = '🧳';
+function openTripModal(existing){
+  const t = existing || { name:'', destination:'', start_date:'', end_date:'', emoji:'🧳', cover_note:'' };
+  selectedTripEmoji = t.emoji || '🧳';
+  openModal(`
+    <h3>${existing ? 'Edit trip' : 'New trip'}</h3>
+    <div class="form-row"><label>Trip name</label><input type="text" id="m-name" value="${esc(t.name)}" placeholder="e.g. Kauai Family Week"></div>
+    <div class="form-row"><label>Destination</label><input type="text" id="m-dest" value="${esc(t.destination)}" placeholder="e.g. Kauai, Hawaii"></div>
+    <div class="form-grid">
+      <div class="form-row"><label>Start date</label><input type="date" id="m-start" value="${t.start_date || ''}"></div>
+      <div class="form-row"><label>End date</label><input type="date" id="m-end" value="${t.end_date || ''}"></div>
+    </div>
+    <label>Emoji</label>
+    <div class="emoji-grid" id="emojiGrid"></div>
+    <div class="form-row"><label>Notes / vibe</label><textarea id="m-note" placeholder="What's this trip about?">${esc(t.cover_note)}</textarea></div>
+    <div class="modal-actions">
+      ${existing ? `<button class="btn btn-danger" onclick="deleteTrip('${t.id}')">Delete trip</button>` : ''}
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveTrip(${existing ? `'${t.id}'` : 'null'})">Save</button>
+    </div>
+  `);
+  renderEmojiGrid();
+}
+function renderEmojiGrid(){
+  const grid = document.getElementById('emojiGrid');
+  grid.innerHTML = EMOJI_OPTIONS.map(e => `<button type="button" class="emoji-opt ${e===selectedTripEmoji?'selected':''}" onclick="pickTripEmoji('${e}')">${e}</button>`).join('');
+}
+function pickTripEmoji(e){
+  selectedTripEmoji = e;
+  renderEmojiGrid();
+}
+function saveTrip(id){
+  const patch = {
+    name: document.getElementById('m-name').value.trim() || 'Untitled trip',
+    destination: document.getElementById('m-dest').value.trim(),
+    start_date: document.getElementById('m-start').value || null,
+    end_date: document.getElementById('m-end').value || null,
+    emoji: selectedTripEmoji,
+    cover_note: document.getElementById('m-note').value.trim()
+  };
+  if(id){
+    const t = db.trips.find(r => r.id === id);
+    Object.assign(t, patch); t.updated_at = nowIso();
+    markDirty('trips', id);
+  } else {
+    const row = Object.assign({ id: uid(), family_code: familyCode, created_at: nowIso(), updated_at: nowIso() }, patch);
+    db.trips.push(row);
+    markDirty('trips', row.id);
+  }
+  closeModal(); renderTrips();
+  if(currentTripId === id) renderTripDetail();
+}
+function deleteTrip(id){
+  if(!confirm('Delete this trip and all its itinerary and packing items?')) return;
+  db.trips = db.trips.filter(t => t.id !== id);
+  ['itinerary','packing'].forEach(key => { db[key] = db[key].filter(r => r.trip_id !== id); });
+  dirty.trips.delete(id);
+  supaFetch('/rest/v1/' + TABLES.trips + '?id=eq.' + id, { method:'DELETE' }).catch(()=>{});
+  saveLocal(); closeModal(); switchTab('trips');
+}
+function editCurrentTrip(){ openTripModal(db.trips.find(t => t.id === currentTripId)); }
+
+function openTripDetail(id){
+  currentTripId = id;
+  switchTab('tripDetail');
+  switchSubtab('itinerary');
+}
+function renderTripDetail(){
+  const t = db.trips.find(r => r.id === currentTripId);
+  if(!t){ switchTab('trips'); return; }
+  document.getElementById('tdName').textContent = (t.emoji || '🧳') + '  ' + t.name;
+  document.getElementById('tdMeta').textContent = [t.destination, t.start_date ? fmtDate(t.start_date) + (t.end_date ? ' – ' + fmtDate(t.end_date) : '') : ''].filter(Boolean).join(' · ');
+  const status = computeTripStatus(t);
+  const pill = document.getElementById('tdStatusPill');
+  pill.textContent = STATUS_LABELS[status];
+  pill.className = 'status-pill status-' + status;
+  renderItinerary(); renderBudget(); renderPacking();
+}
+
+/* =========================================================
+   AT A GLANCE
+   ========================================================= */
+let glanceTripId = null;
+function populateGlanceTripSelect(){
+  const sel = document.getElementById('glanceTripSelect');
+  const order = { active:0, upcoming:1, past:2 };
+  const trips = [...db.trips].filter(t => !t._deleted).sort((a,b) => (order[computeTripStatus(a)]??3) - (order[computeTripStatus(b)]??3) || new Date(a.start_date||0) - new Date(b.start_date||0));
+  if(trips.length === 0){ sel.innerHTML = ''; glanceTripId = null; return; }
+  if(!glanceTripId || !trips.find(t => t.id === glanceTripId)){ glanceTripId = trips[0].id; }
+  sel.innerHTML = trips.map(t => `<option value="${t.id}" ${t.id===glanceTripId?'selected':''}>${t.emoji || '🧳'} ${esc(t.name)}</option>`).join('');
+}
+function renderGlanceCountdown(){
+  const el = document.getElementById('glanceCountdown');
+  const today = new Date(); today.setHours(0,0,0,0);
+  const upcoming = db.trips
+    .filter(t => !t._deleted && t.start_date && computeTripStatus(t) === 'upcoming')
+    .sort((a,b) => new Date(a.start_date) - new Date(b.start_date));
+  if(upcoming.length === 0){ el.innerHTML = ''; return; }
+  const next = upcoming[0];
+  const start = new Date(next.start_date + 'T00:00:00');
+  const days = Math.round((start - today) / 86400000);
+  let phrase;
+  if(days === 0) phrase = `<span class="num">Today!</span>`;
+  else if(days === 1) phrase = `<span class="num">Tomorrow!</span>`;
+  else phrase = `<span class="num">${days} days</span> until`;
+  el.innerHTML = `<div class="glance-countdown">${next.emoji || '🧳'} ${phrase} ${days > 1 ? esc(next.name) : ''}</div>`;
+}
+function renderGlance(){
+  populateGlanceTripSelect();
+  renderGlanceCountdown();
+  const content = document.getElementById('glanceContent');
+  const sel = document.getElementById('glanceTripSelect');
+  glanceTripId = sel.value || glanceTripId;
+  const t = db.trips.find(r => r.id === glanceTripId);
+  if(!t){
+    content.innerHTML = `<div class="empty-state"><h3>No trips yet</h3><p>Add a trip to see its day-by-day plan here.</p></div>`;
+    return;
+  }
+  const items = db.itinerary.filter(i => i.trip_id === t.id && !i._deleted);
+  const status = computeTripStatus(t);
+  let html = `
+    <div class="card" style="margin-bottom:16px;">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
+        <div style="display:flex; align-items:flex-start;">
+          <span class="trip-emoji">${t.emoji || '🧳'}</span>
+          <div>
+            <div class="trip-title">${esc(t.name)}</div>
+            <div class="trip-meta">${esc(t.destination || '')}${t.start_date ? ' · ' + fmtDate(t.start_date) + (t.end_date ? ' – ' + fmtDate(t.end_date) : '') : ''}</div>
+          </div>
+        </div>
+        <span class="status-pill status-${status}">${STATUS_LABELS[status]}</span>
+      </div>
+    </div>
+  `;
+  if(items.length === 0){
+    html += `<div class="empty-state"><h3>No itinerary yet</h3><p>Add items in the Itinerary tab and they'll show up here.</p></div>`;
+    content.innerHTML = html;
+    return;
+  }
+  const groups = {};
+  items.forEach(i => { const key = i.day_date || 'Unscheduled'; (groups[key] = groups[key] || []).push(i); });
+  const dayKeys = Object.keys(groups).sort((a,b) => a==='Unscheduled'?1 : b==='Unscheduled'?-1 : new Date(a)-new Date(b));
+  html += `<div class="glance-grid">` + dayKeys.map(day => {
+    const rows = groups[day].sort((a,b) => {
+      if(a.time && b.time) return a.time.localeCompare(b.time);
+      if(a.time && !b.time) return -1;
+      if(!a.time && b.time) return 1;
+      return (a.sort_order||0)-(b.sort_order||0);
+    });
+    const weekday = day === 'Unscheduled' ? '' : new Date(day + 'T00:00:00').toLocaleDateString(undefined, {weekday:'short'});
+    return `
+      <div class="glance-day">
+        <div class="glance-day-head">
+          ${weekday ? `<span class="glance-weekday">${weekday}</span>` : ''}
+          <span class="glance-date">${day === 'Unscheduled' ? 'Unscheduled' : fmtDate(day)}</span>
+        </div>
+        ${rows.map(i => `
+          <div class="glance-item">
+            <span class="glance-time">${i.time ? fmtTime(i.time) : '·'}</span>
+            <span class="glance-title">${esc(i.title)}${i.location ? ` <span class="glance-loc">— ${esc(i.location)}</span>` : ''}</span>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }).join('') + `</div>`;
+  content.innerHTML = html;
+}
+
+/* =========================================================
+   ITINERARY
+   ========================================================= */
+function renderItinerary(){
+  const list = document.getElementById('itineraryList');
+  const items = db.itinerary.filter(i => i.trip_id === currentTripId && !i._deleted);
+  if(items.length === 0){ list.innerHTML = `<div class="empty-state"><h3>No itinerary items yet</h3><p>Add flights, reservations, and plans day by day.</p></div>`; return; }
+  const groups = {};
+  items.forEach(i => { const key = i.day_date || 'Unscheduled'; (groups[key] = groups[key] || []).push(i); });
+  const dayKeys = Object.keys(groups).sort((a,b) => a==='Unscheduled'?1 : b==='Unscheduled'?-1 : new Date(a)-new Date(b));
+  list.innerHTML = dayKeys.map(day => {
+    const rows = groups[day].sort((a,b) => {
+      if(a.time && b.time) return a.time.localeCompare(b.time);
+      if(a.time && !b.time) return -1;
+      if(!a.time && b.time) return 1;
+      return (a.sort_order||0)-(b.sort_order||0);
+    });
+    return `<div class="day-group">
+      <div class="day-heading">${day === 'Unscheduled' ? 'Unscheduled' : fmtDate(day)}</div>
+      ${rows.map(i => `
+        <div class="itin-item">
+          <div class="itin-time">${i.time ? fmtTime(i.time) : ''}</div>
+          <div class="itin-body">
+            <div class="itin-title">${esc(i.title)}</div>
+            ${i.location ? `<div class="itin-loc">${esc(i.location)}</div>` : ''}
+            ${i.notes ? `<div class="itin-notes">${esc(i.notes)}</div>` : ''}
+          </div>
+          <div class="item-actions">
+            <button class="icon-btn" onclick="openItinItemModal(${JSON.stringify(i.id)})">✎</button>
+            <button class="icon-btn" onclick="deleteItinItem('${i.id}')">✕</button>
+          </div>
+        </div>
+      `).join('')}
+    </div>`;
+  }).join('');
+}
+function openItinItemModal(id){
+  const item = id ? db.itinerary.find(r => r.id === id) : { day_date:'', time:'', title:'', location:'', notes:'' };
+  openModal(`
+    <h3>${id ? 'Edit' : 'Add'} itinerary item</h3>
+    <div class="form-grid">
+      <div class="form-row"><label>Date</label><input type="date" id="m-day" value="${item.day_date || ''}"></div>
+      <div class="form-row"><label>Time</label><input type="time" id="m-time" value="${item.time || ''}"></div>
+    </div>
+    <div class="form-row"><label>Title</label><input type="text" id="m-title" placeholder="e.g. Flight to Kona" value="${esc(item.title)}"></div>
+    <div class="form-row"><label>Location</label><input type="text" id="m-loc" placeholder="e.g. Sky Harbor Terminal 4" value="${esc(item.location)}"></div>
+    <div class="form-row"><label>Notes</label><textarea id="m-notes" placeholder="Confirmation #, reminders...">${esc(item.notes)}</textarea></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveItinItem(${id ? `'${id}'` : 'null'})">Save</button>
+    </div>
+  `);
+}
+function saveItinItem(id){
+  const patch = {
+    day_date: document.getElementById('m-day').value || null,
+    time: document.getElementById('m-time').value.trim(),
+    title: document.getElementById('m-title').value.trim() || 'Untitled',
+    location: document.getElementById('m-loc').value.trim(),
+    notes: document.getElementById('m-notes').value.trim()
+  };
+  if(id){
+    const r = db.itinerary.find(x => x.id === id);
+    Object.assign(r, patch); r.updated_at = nowIso();
+    markDirty('itinerary', id);
+  } else {
+    const row = Object.assign({ id: uid(), family_code: familyCode, trip_id: currentTripId, sort_order: db.itinerary.length, created_at: nowIso(), updated_at: nowIso() }, patch);
+    db.itinerary.push(row);
+    markDirty('itinerary', row.id);
+  }
+  closeModal(); renderItinerary();
+}
+function deleteItinItem(id){
+  db.itinerary = db.itinerary.filter(r => r.id !== id);
+  dirty.itinerary.delete(id);
+  supaFetch('/rest/v1/' + TABLES.itinerary + '?id=eq.' + id, { method:'DELETE' }).catch(()=>{});
+  saveLocal(); renderItinerary();
+}
+
+/* =========================================================
+   BUDGET (trip-level budget vs. actual — no line items;
+   line-item expense tracking lives in the family budget instead)
+   ========================================================= */
+function renderBudget(){
+  const t = db.trips.find(r => r.id === currentTripId);
+  if(!t) return;
+  document.getElementById('budgetAmount').value = t.budget_amount ?? '';
+  document.getElementById('actualCost').value = t.actual_cost ?? '';
+  const row = document.getElementById('budgetVarianceRow');
+  const label = document.getElementById('budgetVarianceLabel');
+  const amt = document.getElementById('budgetVarianceAmt');
+  if(t.budget_amount != null && t.actual_cost != null){
+    const diff = Number(t.budget_amount) - Number(t.actual_cost);
+    row.style.display = 'flex';
+    if(diff < 0){
+      label.textContent = 'Over budget';
+      amt.style.color = 'var(--oxblood)';
+      amt.textContent = fmtMoney(Math.abs(diff));
+    } else {
+      label.textContent = 'Under budget';
+      amt.style.color = 'var(--sea)';
+      amt.textContent = fmtMoney(diff);
+    }
+  } else {
+    row.style.display = 'none';
+  }
+}
+function saveBudgetFields(){
+  const t = db.trips.find(r => r.id === currentTripId);
+  if(!t) return;
+  const budgetVal = document.getElementById('budgetAmount').value;
+  const actualVal = document.getElementById('actualCost').value;
+  t.budget_amount = budgetVal === '' ? null : parseFloat(budgetVal);
+  t.actual_cost = actualVal === '' ? null : parseFloat(actualVal);
+  t.updated_at = nowIso();
+  markDirty('trips', t.id);
+  renderBudget();
+}
+
+/* =========================================================
+   PACKING
+   ========================================================= */
+function renderPacking(){
+  const list = document.getElementById('packingList');
+  const items = db.packing.filter(p => p.trip_id === currentTripId && !p._deleted);
+  if(items.length === 0){
+    list.innerHTML = `<div class="empty-state"><h3>Nothing on the list yet</h3><p>Add items one by one, or start from a template.</p></div>`;
+    document.getElementById('packProgress').style.width = '0%';
+    return;
+  }
+  const groups = {};
+  items.forEach(p => { (groups[p.category || 'General'] = groups[p.category || 'General'] || []).push(p); });
+  list.innerHTML = Object.keys(groups).sort().map(cat => `
+    <div class="pack-cat">
+      <div class="pack-cat-title">${esc(cat)}</div>
+      ${groups[cat].map(p => `
+        <div class="pack-item ${p.checked ? 'checked' : ''}">
+          <input type="checkbox" ${p.checked ? 'checked' : ''} onchange="togglePackItem('${p.id}')">
+          <span class="pack-name">${esc(p.name)}</span>
+          <button class="icon-btn" onclick="deletePackItem('${p.id}')">✕</button>
+        </div>
+      `).join('')}
+    </div>
+  `).join('');
+  const checkedCount = items.filter(p => p.checked).length;
+  document.getElementById('packProgress').style.width = Math.round(100 * checkedCount / items.length) + '%';
+}
+function togglePackItem(id){
+  const p = db.packing.find(r => r.id === id);
+  p.checked = !p.checked; p.updated_at = nowIso();
+  markDirty('packing', id);
+  renderPacking();
+}
+function deletePackItem(id){
+  db.packing = db.packing.filter(r => r.id !== id);
+  dirty.packing.delete(id);
+  supaFetch('/rest/v1/' + TABLES.packing + '?id=eq.' + id, { method:'DELETE' }).catch(()=>{});
+  saveLocal(); renderPacking();
+}
+function openPackItemModal(){
+  openModal(`
+    <h3>Add packing item</h3>
+    <div class="form-row"><label>Item</label><input type="text" id="m-pname" placeholder="e.g. Sunscreen"></div>
+    <div class="form-row"><label>Category</label><input type="text" id="m-pcat" placeholder="e.g. Toiletries" value="General"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="savePackItem()">Add</button>
+    </div>
+  `);
+}
+function savePackItem(){
+  const name = document.getElementById('m-pname').value.trim();
+  if(!name) return;
+  const row = { id: uid(), family_code: familyCode, trip_id: currentTripId, name, category: document.getElementById('m-pcat').value.trim() || 'General', checked:false, created_at: nowIso(), updated_at: nowIso() };
+  db.packing.push(row);
+  markDirty('packing', row.id);
+  closeModal(); renderPacking();
+}
+function openTemplateModal(){
+  if(db.templates.length === 0){ toast('No templates yet — create one in the Packing Lists tab.'); return; }
+  openModal(`
+    <h3>Start from a template</h3>
+    <div class="form-row">
+      ${db.templates.map(t => `
+        <div class="card" style="cursor:pointer; margin-bottom:8px;" onclick="applyTemplate('${t.id}')">
+          <strong>${esc(t.name)}</strong>
+          <div class="trip-meta">${t.items.length} items</div>
+        </div>
+      `).join('')}
+    </div>
+    <div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal()">Cancel</button></div>
+  `);
+}
+function applyTemplate(templateId){
+  const t = db.templates.find(x => x.id === templateId);
+  t.items.forEach(item => {
+    const row = { id: uid(), family_code: familyCode, trip_id: currentTripId, name: item.name, category: item.category || 'General', checked:false, created_at: nowIso(), updated_at: nowIso() };
+    db.packing.push(row);
+    markDirty('packing', row.id);
+  });
+  closeModal(); renderPacking(); toast('Template added');
+}
+
+/* =========================================================
+   PACKING LIST TEMPLATES (top-level management tab)
+   ========================================================= */
+let templateDraftItems = [];
+function renderTemplatesList(){
+  const list = document.getElementById('templatesList');
+  if(!list) return;
+  const templates = db.templates.filter(t => !t._deleted);
+  if(templates.length === 0){
+    list.innerHTML = `<div class="empty-state"><h3>No packing templates yet</h3><p>Build one for beach trips, ski trips, or anything you pack often.</p></div>`;
+    return;
+  }
+  list.innerHTML = templates.map(t => `
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
+        <div>
+          <div class="trip-title">${esc(t.name)}</div>
+          <div class="trip-meta">${t.items.length} item${t.items.length===1?'':'s'}</div>
+        </div>
+        <div class="item-actions">
+          <button class="icon-btn" onclick="openTemplateEditModal('${t.id}')">✎ Edit</button>
+          <button class="icon-btn" onclick="deleteTemplate('${t.id}')">✕ Delete</button>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+function openTemplateEditModal(id){
+  const t = id ? db.templates.find(x => x.id === id) : { name:'', items:[] };
+  templateDraftItems = JSON.parse(JSON.stringify(t.items || []));
+  openModal(`
+    <h3>${id ? 'Edit' : 'New'} packing template</h3>
+    <div class="form-row"><label>Template name</label><input type="text" id="m-tname" placeholder="e.g. Beach trip" value="${esc(t.name)}"></div>
+    <label>Items</label>
+    <div id="templateItemRows" style="margin-bottom:10px;"></div>
+    <button class="btn btn-ghost btn-sm" onclick="addTemplateDraftRow()">+ Add item</button>
+    <div class="modal-actions">
+      ${id ? `<button class="btn btn-danger" onclick="deleteTemplate('${t.id}')">Delete template</button>` : ''}
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveTemplateEdit(${id ? `'${id}'` : 'null'})">Save</button>
+    </div>
+  `);
+  renderTemplateDraftRows();
+}
+function renderTemplateDraftRows(){
+  const wrap = document.getElementById('templateItemRows');
+  if(templateDraftItems.length === 0){
+    wrap.innerHTML = `<div class="trip-meta" style="margin-bottom:8px;">No items yet — add your first one below.</div>`;
+    return;
+  }
+  wrap.innerHTML = templateDraftItems.map((item, idx) => `
+    <div class="form-grid" style="grid-template-columns: 1fr 1fr auto; gap:8px; margin-bottom:8px; align-items:center;">
+      <input type="text" value="${esc(item.name)}" placeholder="Item" oninput="updateTemplateDraftRow(${idx}, 'name', this.value)">
+      <input type="text" value="${esc(item.category)}" placeholder="Category" oninput="updateTemplateDraftRow(${idx}, 'category', this.value)">
+      <button class="icon-btn" onclick="removeTemplateDraftRow(${idx})">✕</button>
+    </div>
+  `).join('');
+}
+function addTemplateDraftRow(){
+  templateDraftItems.push({ name:'', category:'General' });
+  renderTemplateDraftRows();
+}
+function updateTemplateDraftRow(idx, field, value){
+  templateDraftItems[idx][field] = value;
+}
+function removeTemplateDraftRow(idx){
+  templateDraftItems.splice(idx, 1);
+  renderTemplateDraftRows();
+}
+function saveTemplateEdit(id){
+  const name = document.getElementById('m-tname').value.trim() || 'Untitled template';
+  const items = templateDraftItems.filter(i => i.name && i.name.trim()).map(i => ({ name: i.name.trim(), category: (i.category || 'General').trim() || 'General' }));
+  if(id){
+    const t = db.templates.find(x => x.id === id);
+    t.name = name; t.items = items; t.updated_at = nowIso();
+    markDirty('templates', id);
+  } else {
+    const row = { id: uid(), family_code: familyCode, name, items, created_at: nowIso(), updated_at: nowIso() };
+    db.templates.push(row);
+    markDirty('templates', row.id);
+  }
+  closeModal(); renderTemplatesList();
+}
+function deleteTemplate(id){
+  if(!confirm('Delete this packing template?')) return;
+  db.templates = db.templates.filter(t => t.id !== id);
+  dirty.templates.delete(id);
+  supaFetch('/rest/v1/' + TABLES.templates + '?id=eq.' + id, { method:'DELETE' }).catch(()=>{});
+  saveLocal(); closeModal(); renderTemplatesList();
+}
+
+/* =========================================================
+   IDEAS
+   ========================================================= */
+const PRIORITY_LABELS = { 'someday':'Someday', 'want-to-go':'Want to go', 'high-priority':'High priority' };
+function renderIdeas(){
+  const list = document.getElementById('ideasList');
+  const order = { 'high-priority':0, 'want-to-go':1, 'someday':2 };
+  const ideas = [...db.ideas].filter(i => !i._deleted).sort((a,b) => (order[a.priority]??3)-(order[b.priority]??3));
+  if(ideas.length === 0){ list.innerHTML = `<div class="empty-state"><h3>No ideas yet</h3><p>Where do you want to go next?</p></div>`; return; }
+  list.innerHTML = ideas.map(i => `
+    <div class="card idea-card">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
+        <div>
+          <div class="trip-title">${esc(i.title)}</div>
+          ${i.notes ? `<div class="trip-meta" style="margin:6px 0;">${esc(i.notes)}</div>` : ''}
+          ${i.tags ? i.tags.split(',').map(t => `<span class="tag-chip">${esc(t.trim())}</span>`).join('') : ''}
+        </div>
+        <span class="priority-badge priority-${i.priority}">${PRIORITY_LABELS[i.priority]}</span>
+      </div>
+      <div class="item-actions" style="margin-top:10px; justify-content:flex-end;">
+        <button class="icon-btn" onclick="openIdeaModal('${i.id}')">✎ Edit</button>
+        <button class="icon-btn" onclick="deleteIdea('${i.id}')">✕ Remove</button>
+        <button class="btn btn-ghost btn-sm" onclick="promoteIdea('${i.id}')">Turn into trip →</button>
+      </div>
+    </div>
+  `).join('');
+}
+function openIdeaModal(id){
+  const i = id ? db.ideas.find(r => r.id === id) : { title:'', notes:'', tags:'', priority:'someday' };
+  openModal(`
+    <h3>${id ? 'Edit' : 'Add'} trip idea</h3>
+    <div class="form-row"><label>Where / what</label><input type="text" id="m-ititle" placeholder="e.g. Japan in cherry blossom season" value="${esc(i.title)}"></div>
+    <div class="form-row"><label>Notes</label><textarea id="m-inotes" placeholder="Why this trip, what you'd do...">${esc(i.notes)}</textarea></div>
+    <div class="form-row"><label>Tags (comma separated)</label><input type="text" id="m-itags" placeholder="e.g. bucket list, anniversary" value="${esc(i.tags)}"></div>
+    <div class="form-row"><label>Priority</label>
+      <select id="m-ipriority">${Object.keys(PRIORITY_LABELS).map(k => `<option value="${k}" ${i.priority===k?'selected':''}>${PRIORITY_LABELS[k]}</option>`).join('')}</select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveIdea(${id ? `'${id}'` : 'null'})">Save</button>
+    </div>
+  `);
+}
+function saveIdea(id){
+  const patch = {
+    title: document.getElementById('m-ititle').value.trim() || 'Untitled idea',
+    notes: document.getElementById('m-inotes').value.trim(),
+    tags: document.getElementById('m-itags').value.trim(),
+    priority: document.getElementById('m-ipriority').value
+  };
+  if(id){
+    const r = db.ideas.find(x => x.id === id);
+    Object.assign(r, patch); r.updated_at = nowIso();
+    markDirty('ideas', id);
+  } else {
+    const row = Object.assign({ id: uid(), family_code: familyCode, created_at: nowIso(), updated_at: nowIso() }, patch);
+    db.ideas.push(row);
+    markDirty('ideas', row.id);
+  }
+  closeModal(); renderIdeas();
+}
+function deleteIdea(id){
+  db.ideas = db.ideas.filter(r => r.id !== id);
+  dirty.ideas.delete(id);
+  supaFetch('/rest/v1/' + TABLES.ideas + '?id=eq.' + id, { method:'DELETE' }).catch(()=>{});
+  saveLocal(); renderIdeas();
+}
+function promoteIdea(id){
+  const i = db.ideas.find(r => r.id === id);
+  const row = { id: uid(), family_code: familyCode, name: i.title, destination: i.title, start_date:null, end_date:null, emoji:'🧳', cover_note: i.notes, created_at: nowIso(), updated_at: nowIso() };
+  db.trips.push(row);
+  markDirty('trips', row.id);
+  deleteIdea(id);
+  toast('Moved to Trips as "' + row.name + '"');
+  switchTab('trips');
+}
+
+/* =========================================================
+   LONG-TERM SCHEDULE
+   ========================================================= */
+function renderSchedule(){
+  const list = document.getElementById('scheduleList');
+  const rows = db.schedule.filter(s => !s._deleted);
+  if(rows.length === 0){ list.innerHTML = `<div class="empty-state"><h3>Nothing earmarked yet</h3><p>Block out future years at a high level — details can come later.</p></div>`; return; }
+  const byYear = {};
+  rows.forEach(s => { (byYear[s.year] = byYear[s.year] || []).push(s); });
+  const years = Object.keys(byYear).sort();
+  list.innerHTML = years.map(y => `
+    <div class="year-group">
+      <div class="year-heading">${y} <span class="count">${byYear[y].length} ${byYear[y].length===1?'plan':'plans'}</span></div>
+      ${byYear[y].map(s => `
+        <div class="card">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
+            <div>
+              ${s.season ? `<div class="season-tag">${esc(s.season)}</div>` : ''}
+              <div class="trip-title" style="margin-top:2px;">${esc(s.title)}</div>
+              ${s.notes ? `<div class="trip-meta" style="margin-top:4px;">${esc(s.notes)}</div>` : ''}
+            </div>
+            <div class="item-actions">
+              <button class="icon-btn" onclick="openScheduleModal('${s.id}')">✎</button>
+              <button class="icon-btn" onclick="deleteSchedule('${s.id}')">✕</button>
+            </div>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `).join('');
+}
+function openScheduleModal(id){
+  const s = id ? db.schedule.find(r => r.id === id) : { year: new Date().getFullYear() + 1, season:'', title:'', notes:'' };
+  openModal(`
+    <h3>${id ? 'Edit' : 'Add'} long-term earmark</h3>
+    <div class="form-grid">
+      <div class="form-row"><label>Year</label><input type="number" id="m-syear" value="${s.year}"></div>
+      <div class="form-row"><label>Season</label>
+        <select id="m-sseason">
+          <option value="">—</option>
+          ${['Winter','Spring','Summer','Fall'].map(sn => `<option ${s.season===sn?'selected':''}>${sn}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <div class="form-row"><label>Title</label><input type="text" id="m-stitle" placeholder="e.g. Big Europe trip" value="${esc(s.title)}"></div>
+    <div class="form-row"><label>Notes</label><textarea id="m-snotes" placeholder="High-level plan, budget target, who's coming...">${esc(s.notes)}</textarea></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveSchedule(${id ? `'${id}'` : 'null'})">Save</button>
+    </div>
+  `);
+}
+function saveSchedule(id){
+  const patch = {
+    year: parseInt(document.getElementById('m-syear').value) || new Date().getFullYear(),
+    season: document.getElementById('m-sseason').value,
+    title: document.getElementById('m-stitle').value.trim() || 'Untitled plan',
+    notes: document.getElementById('m-snotes').value.trim()
+  };
+  if(id){
+    const r = db.schedule.find(x => x.id === id);
+    Object.assign(r, patch); r.updated_at = nowIso();
+    markDirty('schedule', id);
+  } else {
+    const row = Object.assign({ id: uid(), family_code: familyCode, created_at: nowIso(), updated_at: nowIso() }, patch);
+    db.schedule.push(row);
+    markDirty('schedule', row.id);
+  }
+  closeModal(); renderSchedule();
+}
+function deleteSchedule(id){
+  db.schedule = db.schedule.filter(r => r.id !== id);
+  dirty.schedule.delete(id);
+  supaFetch('/rest/v1/' + TABLES.schedule + '?id=eq.' + id, { method:'DELETE' }).catch(()=>{});
+  saveLocal(); renderSchedule();
+}
+
+/* =========================================================
+   FAVORITES / DESTINATION RANKINGS
+   ========================================================= */
+function renderRankings(){
+  const list = document.getElementById('rankingsList');
+  const rows = [...db.rankings].filter(r => !r._deleted).sort((a,b) => b.rating - a.rating);
+  if(rows.length === 0){ list.innerHTML = `<div class="empty-state"><h3>No rankings yet</h3><p>Rate the places you've been, 1–10.</p></div>`; return; }
+  list.innerHTML = rows.map((r, idx) => `
+    <div class="rank-row">
+      <div class="rank-num">#${idx+1}</div>
+      <div class="rank-score">${Number(r.rating).toFixed(1)}</div>
+      <div style="flex:1;">
+        <div class="trip-title" style="font-size:1rem;">${esc(r.destination)}</div>
+        ${r.notes ? `<div class="trip-meta">${esc(r.notes)}</div>` : ''}
+        ${r.visited_date ? `<div class="trip-meta">Visited ${fmtDate(r.visited_date)}</div>` : ''}
+      </div>
+      <div class="item-actions">
+        <button class="icon-btn" onclick="openRankingModal('${r.id}')">✎</button>
+        <button class="icon-btn" onclick="deleteRanking('${r.id}')">✕</button>
+      </div>
+    </div>
+  `).join('');
+}
+function openRankingModal(id){
+  const r = id ? db.rankings.find(x => x.id === id) : { destination:'', rating:8, notes:'', visited_date:'' };
+  openModal(`
+    <h3>${id ? 'Edit' : 'Rank'} destination</h3>
+    <div class="form-row"><label>Destination</label><input type="text" id="m-rdest" placeholder="e.g. Kauai, Hawaii" value="${esc(r.destination)}"></div>
+    <div class="form-row"><label>Rating (1–10)</label><input type="number" min="1" max="10" step="0.5" id="m-rrating" value="${r.rating}"></div>
+    <div class="form-row"><label>Visited</label><input type="date" id="m-rdate" value="${r.visited_date || ''}"></div>
+    <div class="form-row"><label>Notes</label><textarea id="m-rnotes" placeholder="What made it great (or not)...">${esc(r.notes)}</textarea></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveRanking(${id ? `'${id}'` : 'null'})">Save</button>
+    </div>
+  `);
+}
+function saveRanking(id){
+  const patch = {
+    destination: document.getElementById('m-rdest').value.trim() || 'Unnamed destination',
+    rating: parseFloat(document.getElementById('m-rrating').value) || 0,
+    visited_date: document.getElementById('m-rdate').value || null,
+    notes: document.getElementById('m-rnotes').value.trim()
+  };
+  if(id){
+    const r = db.rankings.find(x => x.id === id);
+    Object.assign(r, patch); r.updated_at = nowIso();
+    markDirty('rankings', id);
+  } else {
+    const row = Object.assign({ id: uid(), family_code: familyCode, created_at: nowIso(), updated_at: nowIso() }, patch);
+    db.rankings.push(row);
+    markDirty('rankings', row.id);
+  }
+  closeModal(); renderRankings();
+}
+function deleteRanking(id){
+  db.rankings = db.rankings.filter(r => r.id !== id);
+  dirty.rankings.delete(id);
+  supaFetch('/rest/v1/' + TABLES.rankings + '?id=eq.' + id, { method:'DELETE' }).catch(()=>{});
+  saveLocal(); renderRankings();
+}
+
+/* =========================================================
+   Init
+   ========================================================= */
+if(familyCode){
+  document.getElementById('join-code').value = familyCode;
+}
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./oasis-sw.js').catch(() => {});
+  });
+}
+</script>
+
+</body>
+</html>
