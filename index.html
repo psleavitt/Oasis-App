@@ -457,7 +457,9 @@
 
   /* Packing */
   .pack-cat{ margin-bottom:18px; }
-  .pack-cat-title{ font-size:0.85rem; font-weight:700; color: var(--sea); margin-bottom:8px; text-transform:uppercase; letter-spacing:0.04em; }
+  .pack-cat-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+  .pack-cat-title{ font-size:0.85rem; font-weight:700; color: var(--sea); text-transform:uppercase; letter-spacing:0.04em; }
+  .pack-cat-delete{ font-size:0.72rem; white-space:nowrap; }
   .pack-item{ display:flex; align-items:center; gap:10px; padding: 7px 0; }
   .pack-item input[type=checkbox]{ width:18px; height:18px; accent-color: var(--sea); }
   .pack-item.checked .pack-name{ text-decoration: line-through; color: var(--ink-soft); }
@@ -1321,10 +1323,18 @@ function renderPacking(){
     return;
   }
   const groups = {};
-  items.forEach(p => { (groups[p.category || 'General'] = groups[p.category || 'General'] || []).push(p); });
-  list.innerHTML = Object.keys(groups).sort().map(cat => `
+  const categoryOrder = [];
+  items.forEach(p => {
+    const cat = p.category || 'General';
+    if(!groups[cat]){ groups[cat] = []; categoryOrder.push(cat); }
+    groups[cat].push(p);
+  });
+  list.innerHTML = categoryOrder.map(cat => `
     <div class="pack-cat">
-      <div class="pack-cat-title">${esc(cat)}</div>
+      <div class="pack-cat-head">
+        <div class="pack-cat-title">${esc(cat)}</div>
+        <button class="icon-btn pack-cat-delete" data-category="${esc(cat)}">✕ Delete category</button>
+      </div>
       ${groups[cat].map(p => `
         <div class="pack-item ${p.checked ? 'checked' : ''}">
           <input type="checkbox" ${p.checked ? 'checked' : ''} onchange="togglePackItem('${p.id}')">
@@ -1334,6 +1344,9 @@ function renderPacking(){
       `).join('')}
     </div>
   `).join('');
+  list.querySelectorAll('.pack-cat-delete').forEach(btn => {
+    btn.addEventListener('click', () => deletePackCategory(btn.dataset.category));
+  });
   const checkedCount = items.filter(p => p.checked).length;
   document.getElementById('packProgress').style.width = Math.round(100 * checkedCount / items.length) + '%';
 }
@@ -1347,6 +1360,15 @@ function deletePackItem(id){
   db.packing = db.packing.filter(r => r.id !== id);
   dirty.packing.delete(id);
   supaFetch('/rest/v1/' + TABLES.packing + '?id=eq.' + id, { method:'DELETE' }).catch(()=>{});
+  saveLocal(); renderPacking();
+}
+function deletePackCategory(cat){
+  const idsToRemove = db.packing.filter(p => p.trip_id === currentTripId && !p._deleted && (p.category || 'General') === cat).map(p => p.id);
+  if(idsToRemove.length === 0) return;
+  if(!confirm('Delete the "' + cat + '" category and all ' + idsToRemove.length + ' item' + (idsToRemove.length===1?'':'s') + ' in it?')) return;
+  db.packing = db.packing.filter(p => !idsToRemove.includes(p.id));
+  idsToRemove.forEach(id => dirty.packing.delete(id));
+  supaFetch('/rest/v1/' + TABLES.packing + '?id=in.(' + idsToRemove.join(',') + ')', { method:'DELETE' }).catch(()=>{});
   saveLocal(); renderPacking();
 }
 function openPackItemModal(){
