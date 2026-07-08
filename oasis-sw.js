@@ -1,7 +1,7 @@
 // Oasis — minimal service worker (installability + basic offline app-shell caching)
-const CACHE_NAME = 'oasis-shell-v1';
+const CACHE_NAME = 'oasis-shell-v2';
 const SHELL_FILES = [
-  './oasis.html',
+  './',
   './oasis-manifest.json',
   './icon-192.png',
   './icon-512.png'

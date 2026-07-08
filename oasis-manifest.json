@@ -2,7 +2,7 @@
   "name": "Oasis — Family Travel Planner",
   "short_name": "Oasis",
   "description": "Trips, budgets, packing lists, and someday-ideas for the whole family.",
-  "start_url": "./oasis.html",
+  "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
