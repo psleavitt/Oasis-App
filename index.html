@@ -1339,6 +1339,7 @@ function renderPacking(){
         <div class="pack-item ${p.checked ? 'checked' : ''}">
           <input type="checkbox" ${p.checked ? 'checked' : ''} onchange="togglePackItem('${p.id}')">
           <span class="pack-name">${esc(p.name)}</span>
+          <button class="icon-btn" onclick="openPackItemModal('${p.id}')">✎</button>
           <button class="icon-btn" onclick="deletePackItem('${p.id}')">✕</button>
         </div>
       `).join('')}
@@ -1371,23 +1372,31 @@ function deletePackCategory(cat){
   supaFetch('/rest/v1/' + TABLES.packing + '?id=in.(' + idsToRemove.join(',') + ')', { method:'DELETE' }).catch(()=>{});
   saveLocal(); renderPacking();
 }
-function openPackItemModal(){
+function openPackItemModal(id){
+  const p = id ? db.packing.find(r => r.id === id) : null;
   openModal(`
-    <h3>Add packing item</h3>
-    <div class="form-row"><label>Item</label><input type="text" id="m-pname" placeholder="e.g. Sunscreen"></div>
-    <div class="form-row"><label>Category</label><input type="text" id="m-pcat" placeholder="e.g. Toiletries" value="General"></div>
+    <h3>${id ? 'Edit' : 'Add'} packing item</h3>
+    <div class="form-row"><label>Item</label><input type="text" id="m-pname" placeholder="e.g. Sunscreen" value="${p ? esc(p.name) : ''}"></div>
+    <div class="form-row"><label>Category</label><input type="text" id="m-pcat" placeholder="e.g. Toiletries" value="${p ? esc(p.category || 'General') : 'General'}"></div>
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
-      <button class="btn btn-primary" onclick="savePackItem()">Add</button>
+      <button class="btn btn-primary" onclick="savePackItem(${id ? `'${id}'` : 'null'})">${id ? 'Save' : 'Add'}</button>
     </div>
   `);
 }
-function savePackItem(){
+function savePackItem(id){
   const name = document.getElementById('m-pname').value.trim();
   if(!name) return;
-  const row = { id: uid(), family_code: familyCode, trip_id: currentTripId, name, category: document.getElementById('m-pcat').value.trim() || 'General', checked:false, created_at: nowIso(), updated_at: nowIso() };
-  db.packing.push(row);
-  markDirty('packing', row.id);
+  const category = document.getElementById('m-pcat').value.trim() || 'General';
+  if(id){
+    const p = db.packing.find(r => r.id === id);
+    p.name = name; p.category = category; p.updated_at = nowIso();
+    markDirty('packing', id);
+  } else {
+    const row = { id: uid(), family_code: familyCode, trip_id: currentTripId, name, category, checked:false, created_at: nowIso(), updated_at: nowIso() };
+    db.packing.push(row);
+    markDirty('packing', row.id);
+  }
   closeModal(); renderPacking();
 }
 function openTemplateModal(){
