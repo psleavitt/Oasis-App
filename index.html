@@ -1132,11 +1132,11 @@ function renderGlanceCountdown(){
   el.innerHTML = `<div class="glance-countdown">${next.emoji || '🧳'} ${phrase} ${days > 1 ? esc(next.name) : ''}</div>`;
 }
 function renderGlance(){
+  const sel = document.getElementById('glanceTripSelect');
+  if(sel && sel.value){ glanceTripId = sel.value; } // capture the user's new pick before we rebuild the dropdown
   populateGlanceTripSelect();
   renderGlanceCountdown();
   const content = document.getElementById('glanceContent');
-  const sel = document.getElementById('glanceTripSelect');
-  glanceTripId = sel.value || glanceTripId;
   const t = db.trips.find(r => r.id === glanceTripId);
   if(!t){
     content.innerHTML = `<div class="empty-state"><h3>No trips yet</h3><p>Add a trip to see its day-by-day plan here.</p></div>`;
