@@ -1220,7 +1220,7 @@ function renderItinerary(){
             ${i.notes ? `<div class="itin-notes">${esc(i.notes)}</div>` : ''}
           </div>
           <div class="item-actions">
-            <button class="icon-btn" onclick="openItinItemModal(${JSON.stringify(i.id)})">✎</button>
+            <button class="icon-btn" onclick="openItinItemModal('${i.id}')">✎</button>
             <button class="icon-btn" onclick="deleteItinItem('${i.id}')">✕</button>
           </div>
         </div>
