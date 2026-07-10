@@ -472,15 +472,22 @@
   .progress-track{ height:6px; background:var(--paper); border-radius:4px; overflow:hidden; margin-bottom:16px; }
   .progress-fill{ height:100%; background: var(--sea); transition: width 0.3s ease; }
 
-  /* Favorites / rankings */
-  .rank-row{ display:flex; align-items:center; gap:14px; padding: 12px 0; border-bottom:1px solid var(--paper-darker); }
+  /* Favorites — lists and ranked items */
+  .fav-list-card{ cursor:pointer; }
+  .fav-list-card:hover{ border-color: var(--brass-soft); }
+  .fav-list-title{ font-size:1.1rem; font-family:'Fraunces', serif; font-weight:600; }
+  .fav-list-preview{ color: var(--ink-soft); font-size:0.85rem; margin-top:4px; }
+  .fav-list-count{ font-size:0.78rem; color: var(--ink-soft); white-space:nowrap; }
+
+  .rank-row{ display:flex; align-items:center; gap:12px; padding: 12px 0; border-bottom:1px solid var(--paper-darker); }
   .rank-row:last-child{ border-bottom:none; }
-  .rank-num{ font-family:'Fraunces', serif; font-size:1.3rem; color: var(--brass); min-width: 30px; }
-  .rank-score{
-    font-family:'Quicksand', sans-serif; font-weight:700;
-    background: var(--sea); color:#F7F2E4;
-    border-radius:6px; padding:4px 8px; font-size:0.85rem; min-width:40px; text-align:center;
+  .rank-num{ font-family:'Fraunces', serif; font-size:1.3rem; color: var(--brass); min-width: 28px; }
+  .rank-reorder{ display:flex; flex-direction:column; gap:2px; }
+  .rank-reorder button{
+    background: var(--paper); border:1px solid var(--paper-darker); color: var(--ink-soft);
+    border-radius:5px; width:24px; height:20px; font-size:0.7rem; line-height:1; padding:0;
   }
+  .rank-reorder button:disabled{ opacity:0.3; }
 
   /* Ideas */
   .idea-card{ position:relative; }
@@ -653,14 +660,14 @@
       <div id="ideasList"></div>
     </div>
 
-    <!-- ===== FAVORITES VIEW ===== -->
+    <!-- ===== FAVORITES VIEW (list of lists) ===== -->
     <div class="view" id="view-favorites">
       <div class="section-head">
         <div>
           <h2>Favorites</h2>
-          <div class="section-sub">Everyone's own rankings — trips, destinations, beaches, and more.</div>
+          <div class="section-sub">Everyone's own ranked lists — trips, destinations, beaches, and more.</div>
         </div>
-        <button class="btn btn-primary" onclick="openRankingModal()">+ Add a favorite</button>
+        <button class="btn btn-primary" onclick="openFavListModal()">+ New list</button>
       </div>
       <div class="filter-row">
         <div class="filter-chips" id="favPersonChips"></div>
@@ -668,7 +675,23 @@
       <div class="filter-row">
         <div class="filter-chips" id="favCategoryChips"></div>
       </div>
-      <div class="card" id="rankingsCard"><div id="rankingsList"></div></div>
+      <div id="favListsList"></div>
+    </div>
+
+    <!-- ===== FAVORITE LIST DETAIL VIEW ===== -->
+    <div class="view" id="view-favListDetail">
+      <button class="back-link" onclick="switchTab('favorites')">← Back to favorites</button>
+      <div class="section-head">
+        <div>
+          <h2 id="favListTitle"></h2>
+          <div class="section-sub" id="favListMeta"></div>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button class="btn btn-ghost btn-sm" onclick="editCurrentFavList()">Edit</button>
+          <button class="btn btn-primary btn-sm" onclick="openFavItemModal()">+ Add item</button>
+        </div>
+      </div>
+      <div class="card"><div id="favItemsList"></div></div>
     </div>
 
     <!-- ===== PACKING LIST TEMPLATES VIEW ===== -->
@@ -707,13 +730,14 @@ const TABLES = {
   itinerary: 'oasis_itinerary_items',
   packing: 'oasis_packing_items',
   templates: 'oasis_packing_templates',
-  rankings: 'oasis_destination_rankings',
+  favoriteLists: 'oasis_favorite_lists',
+  favoriteItems: 'oasis_favorite_items',
   ideas: 'oasis_trip_ideas'
 };
 
 let familyCode = localStorage.getItem('oasis_active_code') || '';
-let db = { trips:[], itinerary:[], packing:[], templates:[], rankings:[], ideas:[] };
-let dirty = { trips:new Set(), itinerary:new Set(), packing:new Set(), templates:new Set(), rankings:new Set(), ideas:new Set() };
+let db = { trips:[], itinerary:[], packing:[], templates:[], favoriteLists:[], favoriteItems:[], ideas:[] };
+let dirty = { trips:new Set(), itinerary:new Set(), packing:new Set(), templates:new Set(), favoriteLists:new Set(), favoriteItems:new Set(), ideas:new Set() };
 let currentTripId = null;
 let pushTimer = null;
 let pullTimer = null;
@@ -907,10 +931,11 @@ function renderCurrentView(view){
   else if(view === 'trips') renderTrips();
   else if(view === 'tripDetail') renderTripDetail();
   else if(view === 'ideas') renderIdeas();
-  else if(view === 'favorites') renderRankings();
+  else if(view === 'favorites') renderFavLists();
+  else if(view === 'favListDetail') renderFavListDetail();
   else if(view === 'packingTemplates') renderTemplatesList();
 }
-function renderAll(){ renderGlance(); renderTrips(); renderIdeas(); renderRankings(); renderTemplatesList(); }
+function renderAll(){ renderGlance(); renderTrips(); renderIdeas(); renderFavLists(); renderTemplatesList(); }
 
 function switchSubtab(sub){
   document.querySelectorAll('.subview').forEach(v => v.classList.remove('active'));
@@ -1821,17 +1846,20 @@ function promoteIdea(id){
 }
 
 /* =========================================================
-   FAVORITES — personal rankings across custom categories
+   FAVORITES — per-person ranked lists ("Hannah's Favorite Beaches")
    ========================================================= */
 const FAVORITE_PERSON_SUGGESTIONS = ['Parker','Shannon','Laynie','Hannah'];
-const FAVORITE_CATEGORY_SUGGESTIONS = ['Trip','Destination','Beach','City','Restaurant','Hotel','Hike'];
+const FAVORITE_CATEGORY_SUGGESTIONS = ['Trips','Destinations','Beaches','Cities','Restaurants','Hotels','Hikes'];
 let favPersonFilter = 'all';
 let favCategoryFilter = 'all';
+let currentFavListId = null;
+
+function favListTitle(l){ return (l.person ? l.person + "'s" : 'Untitled') + ' Favorite ' + (l.category || 'List'); }
 
 function renderFavoriteFilters(){
-  const rows = db.rankings.filter(r => !r._deleted);
-  const persons = [...new Set(rows.map(r => r.person).filter(Boolean))].sort();
-  const categories = [...new Set(rows.map(r => r.category).filter(Boolean))].sort();
+  const lists = db.favoriteLists.filter(l => !l._deleted);
+  const persons = [...new Set(lists.map(l => l.person).filter(Boolean))].sort();
+  const categories = [...new Set(lists.map(l => l.category).filter(Boolean))].sort();
   const personWrap = document.getElementById('favPersonChips');
   personWrap.innerHTML = [['all','All people'], ...persons.map(p => [p,p])]
     .map(([key,label]) => `<button class="filter-chip ${favPersonFilter===key?'active':''}" onclick="setFavPersonFilter('${esc(key)}')">${esc(label)}</button>`).join('');
@@ -1839,89 +1867,175 @@ function renderFavoriteFilters(){
   catWrap.innerHTML = [['all','All categories'], ...categories.map(c => [c,c])]
     .map(([key,label]) => `<button class="filter-chip ${favCategoryFilter===key?'active':''}" onclick="setFavCategoryFilter('${esc(key)}')">${esc(label)}</button>`).join('');
 }
-function setFavPersonFilter(val){ favPersonFilter = val; renderRankings(); }
-function setFavCategoryFilter(val){ favCategoryFilter = val; renderRankings(); }
+function setFavPersonFilter(val){ favPersonFilter = val; renderFavLists(); }
+function setFavCategoryFilter(val){ favCategoryFilter = val; renderFavLists(); }
 
-function renderRankings(){
+function renderFavLists(){
   renderFavoriteFilters();
-  const list = document.getElementById('rankingsList');
-  let rows = [...db.rankings].filter(r => !r._deleted);
-  if(favPersonFilter !== 'all'){ rows = rows.filter(r => r.person === favPersonFilter); }
-  if(favCategoryFilter !== 'all'){ rows = rows.filter(r => r.category === favCategoryFilter); }
-  rows.sort((a,b) => b.rating - a.rating);
-  if(rows.length === 0){ list.innerHTML = `<div class="empty-state"><h3>No favorites here</h3><p>Add one, rate it 1–10, and it'll show up here.</p></div>`; return; }
-  list.innerHTML = rows.map((r, idx) => `
+  const wrap = document.getElementById('favListsList');
+  let lists = [...db.favoriteLists].filter(l => !l._deleted);
+  if(favPersonFilter !== 'all'){ lists = lists.filter(l => l.person === favPersonFilter); }
+  if(favCategoryFilter !== 'all'){ lists = lists.filter(l => l.category === favCategoryFilter); }
+  lists.sort((a,b) => favListTitle(a).localeCompare(favListTitle(b)));
+  if(lists.length === 0){ wrap.innerHTML = `<div class="empty-state"><h3>No lists here</h3><p>Start one for a family member and a category — like "Hannah's Favorite Beaches."</p></div>`; return; }
+  wrap.innerHTML = lists.map(l => {
+    const items = db.favoriteItems.filter(i => i.list_id === l.id && !i._deleted).sort((a,b) => a.rank - b.rank);
+    const preview = items.slice(0,3).map(i => i.name).join(', ');
+    return `
+    <div class="card fav-list-card" onclick="openFavListDetail('${l.id}')">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
+        <div>
+          <div class="fav-list-title">${esc(favListTitle(l))}</div>
+          ${preview ? `<div class="fav-list-preview">${esc(preview)}${items.length > 3 ? ', …' : ''}</div>` : `<div class="fav-list-preview">No items yet</div>`}
+        </div>
+        <span class="fav-list-count">${items.length} item${items.length===1?'':'s'}</span>
+      </div>
+    </div>
+  `;
+  }).join('');
+}
+
+function openFavListModal(existing){
+  const l = existing || { person:'', category:'' };
+  openModal(`
+    <h3>${existing ? 'Edit list' : 'New favorites list'}</h3>
+    <div class="form-row">
+      <label>Person</label>
+      <input type="text" id="m-flperson" list="favPersonOptions" placeholder="e.g. Hannah" value="${esc(l.person)}">
+      <datalist id="favPersonOptions">${FAVORITE_PERSON_SUGGESTIONS.map(p => `<option value="${p}">`).join('')}</datalist>
+    </div>
+    <div class="form-row">
+      <label>Category</label>
+      <input type="text" id="m-flcategory" list="favCategoryOptions" placeholder="e.g. Beaches" value="${esc(l.category)}">
+      <datalist id="favCategoryOptions">${FAVORITE_CATEGORY_SUGGESTIONS.map(c => `<option value="${c}">`).join('')}</datalist>
+    </div>
+    <div class="modal-actions">
+      ${existing ? `<button class="btn btn-danger" onclick="deleteFavList('${l.id}')">Delete list</button>` : ''}
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveFavList(${existing ? `'${l.id}'` : 'null'})">Save</button>
+    </div>
+  `);
+}
+function saveFavList(id){
+  const patch = {
+    person: document.getElementById('m-flperson').value.trim() || 'Unassigned',
+    category: document.getElementById('m-flcategory').value.trim() || 'List'
+  };
+  if(id){
+    const l = db.favoriteLists.find(x => x.id === id);
+    Object.assign(l, patch); l.updated_at = nowIso();
+    markDirty('favoriteLists', id);
+  } else {
+    const row = Object.assign({ id: uid(), family_code: familyCode, created_at: nowIso(), updated_at: nowIso() }, patch);
+    db.favoriteLists.push(row);
+    markDirty('favoriteLists', row.id);
+  }
+  closeModal(); renderFavLists();
+  if(currentFavListId === id) renderFavListDetail();
+}
+function deleteFavList(id){
+  if(!confirm('Delete this list and all its items?')) return;
+  db.favoriteLists = db.favoriteLists.filter(l => l.id !== id);
+  const itemIds = db.favoriteItems.filter(i => i.list_id === id).map(i => i.id);
+  db.favoriteItems = db.favoriteItems.filter(i => i.list_id !== id);
+  dirty.favoriteLists.delete(id);
+  itemIds.forEach(iid => dirty.favoriteItems.delete(iid));
+  supaFetch('/rest/v1/' + TABLES.favoriteLists + '?id=eq.' + id, { method:'DELETE' }).catch(()=>{});
+  saveLocal(); closeModal(); switchTab('favorites');
+}
+function editCurrentFavList(){ openFavListModal(db.favoriteLists.find(l => l.id === currentFavListId)); }
+
+function openFavListDetail(id){
+  currentFavListId = id;
+  switchTab('favListDetail');
+}
+function renderFavListDetail(){
+  const l = db.favoriteLists.find(x => x.id === currentFavListId);
+  if(!l){ switchTab('favorites'); return; }
+  document.getElementById('favListTitle').textContent = favListTitle(l);
+  const items = db.favoriteItems.filter(i => i.list_id === l.id && !i._deleted);
+  document.getElementById('favListMeta').textContent = items.length + ' item' + (items.length===1?'':'s') + ' — ranked, top to bottom';
+  renderFavItems();
+}
+function renderFavItems(){
+  const wrap = document.getElementById('favItemsList');
+  const items = db.favoriteItems.filter(i => i.list_id === currentFavListId && !i._deleted).sort((a,b) => a.rank - b.rank);
+  if(items.length === 0){ wrap.innerHTML = `<div class="empty-state"><h3>No items yet</h3><p>Add your first one below.</p></div>`; return; }
+  wrap.innerHTML = items.map((it, idx) => `
     <div class="rank-row">
       <div class="rank-num">#${idx+1}</div>
-      <div class="rank-score">${Number(r.rating).toFixed(1)}</div>
+      <div class="rank-reorder">
+        <button ${idx===0?'disabled':''} onclick="moveFavItem('${it.id}',-1)">▲</button>
+        <button ${idx===items.length-1?'disabled':''} onclick="moveFavItem('${it.id}',1)">▼</button>
+      </div>
       <div style="flex:1;">
-        <div class="trip-title" style="font-size:1rem;">${esc(r.destination)}</div>
-        <div class="trip-meta">
-          ${r.category ? `<span class="tag-chip">${esc(r.category)}</span>` : ''}
-          ${r.person ? `<span class="tag-chip">${esc(r.person)}</span>` : ''}
-        </div>
-        ${r.notes ? `<div class="trip-meta" style="margin-top:4px;">${esc(r.notes)}</div>` : ''}
-        ${r.visited_date ? `<div class="trip-meta">Visited ${fmtDate(r.visited_date)}</div>` : ''}
+        <div class="trip-title" style="font-size:1rem;">${esc(it.name)}</div>
+        ${it.notes ? `<div class="trip-meta" style="margin-top:4px;">${esc(it.notes)}</div>` : ''}
+        ${it.visited_date ? `<div class="trip-meta">Visited ${fmtDate(it.visited_date)}</div>` : ''}
       </div>
       <div class="item-actions">
-        <button class="icon-btn" onclick="openRankingModal('${r.id}')">✎</button>
-        <button class="icon-btn" onclick="deleteRanking('${r.id}')">✕</button>
+        <button class="icon-btn" onclick="openFavItemModal('${it.id}')">✎</button>
+        <button class="icon-btn" onclick="deleteFavItem('${it.id}')">✕</button>
       </div>
     </div>
   `).join('');
 }
-function openRankingModal(id){
-  const r = id ? db.rankings.find(x => x.id === id) : { destination:'', rating:8, notes:'', visited_date:'', person:'', category:'Destination' };
+function moveFavItem(id, direction){
+  const items = db.favoriteItems.filter(i => i.list_id === currentFavListId && !i._deleted).sort((a,b) => a.rank - b.rank);
+  const idx = items.findIndex(i => i.id === id);
+  const swapIdx = idx + direction;
+  if(idx === -1 || swapIdx < 0 || swapIdx >= items.length) return;
+  const a = items[idx], b = items[swapIdx];
+  const tmp = a.rank; a.rank = b.rank; b.rank = tmp;
+  a.updated_at = nowIso(); b.updated_at = nowIso();
+  markDirty('favoriteItems', a.id); markDirty('favoriteItems', b.id);
+  renderFavItems();
+}
+function renumberFavItems(listId){
+  const items = db.favoriteItems.filter(i => i.list_id === listId && !i._deleted).sort((a,b) => a.rank - b.rank);
+  items.forEach((it, idx) => {
+    const newRank = idx + 1;
+    if(it.rank !== newRank){ it.rank = newRank; it.updated_at = nowIso(); markDirty('favoriteItems', it.id); }
+  });
+}
+function openFavItemModal(id){
+  const it = id ? db.favoriteItems.find(x => x.id === id) : { name:'', notes:'', visited_date:'' };
   openModal(`
-    <h3>${id ? 'Edit' : 'Add'} favorite</h3>
-    <div class="form-row"><label>Name</label><input type="text" id="m-rdest" placeholder="e.g. Kauai, Hawaii" value="${esc(r.destination)}"></div>
-    <div class="form-grid">
-      <div class="form-row">
-        <label>Category</label>
-        <input type="text" id="m-rcategory" list="favCategoryOptions" placeholder="e.g. Beach" value="${esc(r.category || '')}">
-        <datalist id="favCategoryOptions">${FAVORITE_CATEGORY_SUGGESTIONS.map(c => `<option value="${c}">`).join('')}</datalist>
-      </div>
-      <div class="form-row">
-        <label>Person</label>
-        <input type="text" id="m-rperson" list="favPersonOptions" placeholder="e.g. Parker" value="${esc(r.person || '')}">
-        <datalist id="favPersonOptions">${FAVORITE_PERSON_SUGGESTIONS.map(p => `<option value="${p}">`).join('')}</datalist>
-      </div>
-    </div>
-    <div class="form-row"><label>Rating (1–10)</label><input type="number" min="1" max="10" step="0.5" id="m-rrating" value="${r.rating}"></div>
-    <div class="form-row"><label>Visited</label><input type="date" id="m-rdate" value="${r.visited_date || ''}"></div>
-    <div class="form-row"><label>Notes</label><textarea id="m-rnotes" placeholder="What made it great (or not)...">${esc(r.notes)}</textarea></div>
+    <h3>${id ? 'Edit' : 'Add'} item</h3>
+    <div class="form-row"><label>Name</label><input type="text" id="m-finame" placeholder="e.g. Kauai, Hawaii" value="${esc(it.name)}"></div>
+    <div class="form-row"><label>Visited</label><input type="date" id="m-fidate" value="${it.visited_date || ''}"></div>
+    <div class="form-row"><label>Notes</label><textarea id="m-finotes" placeholder="What made it great...">${esc(it.notes)}</textarea></div>
     <div class="modal-actions">
-      ${id ? `<button class="btn btn-danger" onclick="deleteRanking('${r.id}')">Delete</button>` : ''}
+      ${id ? `<button class="btn btn-danger" onclick="deleteFavItem('${it.id}')">Delete</button>` : ''}
       <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
-      <button class="btn btn-primary" onclick="saveRanking(${id ? `'${id}'` : 'null'})">Save</button>
+      <button class="btn btn-primary" onclick="saveFavItem(${id ? `'${id}'` : 'null'})">Save</button>
     </div>
   `);
 }
-function saveRanking(id){
+function saveFavItem(id){
   const patch = {
-    destination: document.getElementById('m-rdest').value.trim() || 'Unnamed favorite',
-    category: document.getElementById('m-rcategory').value.trim() || 'Destination',
-    person: document.getElementById('m-rperson').value.trim(),
-    rating: parseFloat(document.getElementById('m-rrating').value) || 0,
-    visited_date: document.getElementById('m-rdate').value || null,
-    notes: document.getElementById('m-rnotes').value.trim()
+    name: document.getElementById('m-finame').value.trim() || 'Unnamed',
+    visited_date: document.getElementById('m-fidate').value || null,
+    notes: document.getElementById('m-finotes').value.trim()
   };
   if(id){
-    const r = db.rankings.find(x => x.id === id);
-    Object.assign(r, patch); r.updated_at = nowIso();
-    markDirty('rankings', id);
+    const it = db.favoriteItems.find(x => x.id === id);
+    Object.assign(it, patch); it.updated_at = nowIso();
+    markDirty('favoriteItems', id);
   } else {
-    const row = Object.assign({ id: uid(), family_code: familyCode, created_at: nowIso(), updated_at: nowIso() }, patch);
-    db.rankings.push(row);
-    markDirty('rankings', row.id);
+    const existingCount = db.favoriteItems.filter(i => i.list_id === currentFavListId && !i._deleted).length;
+    const row = Object.assign({ id: uid(), family_code: familyCode, list_id: currentFavListId, rank: existingCount + 1, created_at: nowIso(), updated_at: nowIso() }, patch);
+    db.favoriteItems.push(row);
+    markDirty('favoriteItems', row.id);
   }
-  closeModal(); renderRankings();
+  closeModal(); renderFavListDetail();
 }
-function deleteRanking(id){
-  db.rankings = db.rankings.filter(r => r.id !== id);
-  dirty.rankings.delete(id);
-  supaFetch('/rest/v1/' + TABLES.rankings + '?id=eq.' + id, { method:'DELETE' }).catch(()=>{});
-  saveLocal(); closeModal(); renderRankings();
+function deleteFavItem(id){
+  db.favoriteItems = db.favoriteItems.filter(r => r.id !== id);
+  dirty.favoriteItems.delete(id);
+  supaFetch('/rest/v1/' + TABLES.favoriteItems + '?id=eq.' + id, { method:'DELETE' }).catch(()=>{});
+  renumberFavItems(currentFavListId);
+  saveLocal(); closeModal(); renderFavListDetail();
 }
 
 /* =========================================================
