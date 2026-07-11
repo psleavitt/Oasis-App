@@ -429,6 +429,24 @@
   .glance-title{ flex:1; }
   .glance-loc{ color: var(--ink-soft); font-size:0.8rem; }
 
+  /* Ideas — compact upcoming seasons dashboard */
+  .idea-glance-grid{ display:grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap:14px; margin-bottom:20px; }
+  .idea-glance-card{
+    background: var(--paper-dark);
+    border: 1px solid var(--paper-darker);
+    border-radius: var(--radius);
+    padding: 14px;
+    box-shadow: var(--card-shadow);
+  }
+  .idea-glance-head{
+    font-family:'Fraunces', serif; font-weight:600; font-size:1.05rem; color: var(--sea);
+    margin-bottom: 8px; padding-bottom:8px; border-bottom: 2px solid var(--sea-soft);
+  }
+  .idea-glance-item{
+    font-size:0.85rem; padding: 4px 0; cursor:pointer; color: var(--ink);
+  }
+  .idea-glance-item:hover{ color: var(--sea); }
+
   /* Itinerary timeline */
   .day-group{ margin-bottom: 22px; }
   .day-heading{
@@ -653,6 +671,7 @@
         </div>
         <button class="btn btn-primary" onclick="openIdeaModal()">+ Add idea</button>
       </div>
+      <div id="ideaSeasonGlance"></div>
       <div class="filter-row">
         <select id="ideaYearFilter" onchange="setIdeaYearFilter(this.value)" style="max-width:140px;"></select>
         <div class="filter-chips" id="ideaSeasonChips"></div>
@@ -1727,29 +1746,79 @@ function importDataJSON(file){
    IDEAS
    ========================================================= */
 const PRIORITY_LABELS = { 'someday':'Someday', 'want-to-go':'Want to go', 'high-priority':'High priority' };
-const SEASON_OPTIONS = ['Winter','Spring','Summer','Fall'];
+const SEASON_OPTIONS = ['Winter','Spring','Summer','Fall']; // Winter first, per-year ordering
 let ideaYearFilter = 'all';
 let ideaSeasonFilter = 'all';
+
+function seasonKey(year, season){
+  const idx = SEASON_OPTIONS.indexOf(season);
+  if(!year || idx === -1) return null;
+  return year * 4 + idx;
+}
+function currentSeasonKey(){
+  const now = new Date();
+  const month = now.getMonth() + 1; // 1-12
+  let idx;
+  if(month === 12 || month <= 2) idx = 0;       // Winter
+  else if(month <= 5) idx = 1;                  // Spring
+  else if(month <= 8) idx = 2;                  // Summer
+  else idx = 3;                                 // Fall
+  return now.getFullYear() * 4 + idx;
+}
+
+function renderIdeaSeasonGlance(){
+  const wrap = document.getElementById('ideaSeasonGlance');
+  const nowKey = currentSeasonKey();
+  const dated = db.ideas.filter(i => !i._deleted && i.target_year && i.target_season);
+  const groups = {};
+  dated.forEach(i => {
+    const key = seasonKey(i.target_year, i.target_season);
+    if(key === null || key <= nowKey) return; // only strictly-upcoming seasons
+    if(!groups[key]) groups[key] = { year: i.target_year, season: i.target_season, ideas: [] };
+    groups[key].ideas.push(i);
+  });
+  const keys = Object.keys(groups).map(Number).sort((a,b) => a-b);
+  if(keys.length === 0){ wrap.innerHTML = ''; return; }
+  wrap.innerHTML = `<div class="idea-glance-grid">` + keys.map(k => {
+    const g = groups[k];
+    return `
+      <div class="idea-glance-card">
+        <div class="idea-glance-head">${g.season} ${g.year}</div>
+        ${g.ideas.map(i => `<div class="idea-glance-item" onclick="openIdeaModal('${i.id}')">${esc(i.title)}</div>`).join('')}
+      </div>
+    `;
+  }).join('') + `</div>`;
+}
 
 function renderIdeaFilters(){
   const yearSel = document.getElementById('ideaYearFilter');
   const years = [...new Set(db.ideas.filter(i => !i._deleted && i.target_year).map(i => i.target_year))].sort();
   yearSel.innerHTML = `<option value="all">All years</option>` + years.map(y => `<option value="${y}" ${String(ideaYearFilter)===String(y)?'selected':''}>${y}</option>`).join('');
   if(ideaYearFilter !== 'all' && !years.includes(Number(ideaYearFilter))){ ideaYearFilter = 'all'; yearSel.value = 'all'; }
+  yearSel.disabled = (ideaSeasonFilter === 'unscheduled');
   const chipsWrap = document.getElementById('ideaSeasonChips');
-  const chips = [['all','All seasons'], ...SEASON_OPTIONS.map(s => [s,s])];
+  const chips = [['all','All seasons'], ...SEASON_OPTIONS.map(s => [s,s]), ['unscheduled','Unscheduled']];
   chipsWrap.innerHTML = chips.map(([key,label]) => `<button class="filter-chip ${ideaSeasonFilter===key?'active':''}" onclick="setIdeaSeasonFilter('${key}')">${label}</button>`).join('');
 }
 function setIdeaYearFilter(val){ ideaYearFilter = val; renderIdeas(); }
-function setIdeaSeasonFilter(val){ ideaSeasonFilter = val; renderIdeas(); }
+function setIdeaSeasonFilter(val){
+  ideaSeasonFilter = val;
+  if(val === 'unscheduled'){ ideaYearFilter = 'all'; }
+  renderIdeas();
+}
 
 function renderIdeas(){
+  renderIdeaSeasonGlance();
   renderIdeaFilters();
   const list = document.getElementById('ideasList');
   const order = { 'high-priority':0, 'want-to-go':1, 'someday':2 };
   let ideas = [...db.ideas].filter(i => !i._deleted);
-  if(ideaYearFilter !== 'all'){ ideas = ideas.filter(i => String(i.target_year) === String(ideaYearFilter)); }
-  if(ideaSeasonFilter !== 'all'){ ideas = ideas.filter(i => i.target_season === ideaSeasonFilter); }
+  if(ideaSeasonFilter === 'unscheduled'){
+    ideas = ideas.filter(i => !i.target_year && !i.target_season);
+  } else {
+    if(ideaYearFilter !== 'all'){ ideas = ideas.filter(i => String(i.target_year) === String(ideaYearFilter)); }
+    if(ideaSeasonFilter !== 'all'){ ideas = ideas.filter(i => i.target_season === ideaSeasonFilter); }
+  }
   ideas.sort((a,b) => (order[a.priority]??3)-(order[b.priority]??3));
   if(ideas.length === 0){ list.innerHTML = `<div class="empty-state"><h3>No ideas here</h3><p>Where do you want to go next?</p></div>`; return; }
   list.innerHTML = ideas.map(i => `
