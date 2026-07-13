@@ -374,7 +374,8 @@
     box-shadow: 0 20px 50px rgba(0,0,0,0.25);
   }
   .modal h3{ font-size:1.2rem; margin-bottom: 16px; }
-  .modal-actions{ display:flex; gap:10px; justify-content:flex-end; margin-top:18px; }
+  .modal-actions{ display:flex; gap:10px; justify-content:flex-end; margin-top:18px; flex-wrap:wrap; }
+  .modal-actions-secondary{ display:flex; gap:8px; flex-wrap:wrap; margin-right:auto; }
 
   .fab{
     position: fixed;
@@ -1079,8 +1080,10 @@ function openTripModal(existing){
     <div class="emoji-grid" id="emojiGrid"></div>
     <div class="form-row"><label>Notes / vibe</label><textarea id="m-note" placeholder="What's this trip about?">${esc(t.cover_note)}</textarea></div>
     <div class="modal-actions">
-      ${existing ? `<button class="btn btn-danger" onclick="deleteTrip('${t.id}')">Delete trip</button>` : ''}
-      ${existing ? `<button class="btn btn-ghost" onclick="demoteTripToIdea('${t.id}')">Move to Ideas</button>` : ''}
+      <div class="modal-actions-secondary">
+        ${existing ? `<button class="btn btn-danger btn-sm" onclick="deleteTrip('${t.id}')">Delete trip</button>` : ''}
+        ${existing ? `<button class="btn btn-ghost btn-sm" onclick="demoteTripToIdea('${t.id}')">Move to Ideas</button>` : ''}
+      </div>
       <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
       <button class="btn btn-primary" onclick="saveTrip(${existing ? `'${t.id}'` : 'null'})">Save</button>
     </div>
