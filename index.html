@@ -483,6 +483,7 @@
   .pack-cat-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
   .pack-cat-title{ font-size:0.85rem; font-weight:700; color: var(--sea); text-transform:uppercase; letter-spacing:0.04em; }
   .pack-cat-delete{ font-size:0.72rem; white-space:nowrap; }
+  .pack-cat-add{ font-size:0.72rem; white-space:nowrap; color: var(--sea); }
   .pack-item{ display:flex; align-items:center; gap:10px; padding: 7px 0; }
   .pack-item input[type=checkbox]{ width:18px; height:18px; accent-color: var(--sea); }
   .pack-item.checked .pack-name{ text-decoration: line-through; color: var(--ink-soft); }
@@ -657,7 +658,10 @@
             <button class="btn btn-ghost btn-sm" onclick="openPackItemModal()">+ Add item</button>
           </div>
         </div>
-        <div class="progress-track"><div class="progress-fill" id="packProgress" style="width:0%"></div></div>
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:6px;">
+          <div class="progress-track" style="flex:1; margin-bottom:0;"><div class="progress-fill" id="packProgress" style="width:0%"></div></div>
+          <span id="packPercentLabel" class="mono" style="white-space:nowrap; font-size:0.78rem; color:var(--ink-soft);"></span>
+        </div>
         <div id="packingList"></div>
       </div>
     </div>
@@ -1076,6 +1080,7 @@ function openTripModal(existing){
     <div class="form-row"><label>Notes / vibe</label><textarea id="m-note" placeholder="What's this trip about?">${esc(t.cover_note)}</textarea></div>
     <div class="modal-actions">
       ${existing ? `<button class="btn btn-danger" onclick="deleteTrip('${t.id}')">Delete trip</button>` : ''}
+      ${existing ? `<button class="btn btn-ghost" onclick="demoteTripToIdea('${t.id}')">Move to Ideas</button>` : ''}
       <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
       <button class="btn btn-primary" onclick="saveTrip(${existing ? `'${t.id}'` : 'null'})">Save</button>
     </div>
@@ -1118,6 +1123,48 @@ function deleteTrip(id){
   dirty.trips.delete(id);
   supaFetch('/rest/v1/' + TABLES.trips + '?id=eq.' + id, { method:'DELETE' }).catch(()=>{});
   saveLocal(); closeModal(); switchTab('trips');
+}
+function seasonFromMonth(month){
+  if(month === 12 || month <= 2) return 'Winter';
+  if(month <= 5) return 'Spring';
+  if(month <= 8) return 'Summer';
+  return 'Fall';
+}
+function demoteTripToIdea(id){
+  const t = db.trips.find(r => r.id === id);
+  if(!t) return;
+  const itinCount = db.itinerary.filter(i => i.trip_id === id && !i._deleted).length;
+  const packCount = db.packing.filter(p => p.trip_id === id && !p._deleted).length;
+  let warning = 'Move "' + t.name + '" back to Ideas?';
+  const losses = [];
+  if(itinCount > 0) losses.push(itinCount + ' itinerary item' + (itinCount===1?'':'s'));
+  if(packCount > 0) losses.push(packCount + ' packing item' + (packCount===1?'':'s'));
+  if(losses.length > 0){ warning += '\n\nThis will permanently delete ' + losses.join(' and ') + '. Its budget will carry over as a potential budget on the idea.'; }
+  if(!confirm(warning)) return;
+
+  let target_year = null, target_season = null;
+  if(t.start_date){
+    const d = new Date(t.start_date + 'T00:00:00');
+    target_year = d.getFullYear();
+    target_season = seasonFromMonth(d.getMonth() + 1);
+  }
+  const row = {
+    id: uid(), family_code: familyCode, title: t.name, notes: t.cover_note || '',
+    tags: '', priority: 'someday',
+    target_year, target_season,
+    potential_budget: t.budget_amount ?? null,
+    created_at: nowIso(), updated_at: nowIso()
+  };
+  db.ideas.push(row);
+  markDirty('ideas', row.id);
+
+  db.trips = db.trips.filter(r => r.id !== id);
+  ['itinerary','packing'].forEach(key => { db[key] = db[key].filter(r => r.trip_id !== id); });
+  dirty.trips.delete(id);
+  supaFetch('/rest/v1/' + TABLES.trips + '?id=eq.' + id, { method:'DELETE' }).catch(()=>{});
+  saveLocal(); closeModal();
+  toast('Moved back to Ideas as "' + row.title + '"');
+  switchTab('ideas');
 }
 function editCurrentTrip(){ openTripModal(db.trips.find(t => t.id === currentTripId)); }
 
@@ -1355,6 +1402,7 @@ function renderPacking(){
   if(items.length === 0){
     list.innerHTML = `<div class="empty-state"><h3>Nothing on the list yet</h3><p>Add items one by one, or start from a template.</p></div>`;
     document.getElementById('packProgress').style.width = '0%';
+    document.getElementById('packPercentLabel').textContent = '';
     return;
   }
   const groups = {};
@@ -1368,7 +1416,10 @@ function renderPacking(){
     <div class="pack-cat">
       <div class="pack-cat-head">
         <div class="pack-cat-title">${esc(cat)}</div>
-        <button class="icon-btn pack-cat-delete" data-category="${esc(cat)}">✕ Delete category</button>
+        <div style="display:flex; gap:6px;">
+          <button class="icon-btn pack-cat-add" data-category="${esc(cat)}">+ Add item</button>
+          <button class="icon-btn pack-cat-delete" data-category="${esc(cat)}">✕ Delete category</button>
+        </div>
       </div>
       ${groups[cat].map(p => `
         <div class="pack-item ${p.checked ? 'checked' : ''}">
@@ -1383,8 +1434,13 @@ function renderPacking(){
   list.querySelectorAll('.pack-cat-delete').forEach(btn => {
     btn.addEventListener('click', () => deletePackCategory(btn.dataset.category));
   });
+  list.querySelectorAll('.pack-cat-add').forEach(btn => {
+    btn.addEventListener('click', () => openPackItemModal(null, btn.dataset.category));
+  });
   const checkedCount = items.filter(p => p.checked).length;
-  document.getElementById('packProgress').style.width = Math.round(100 * checkedCount / items.length) + '%';
+  const pct = Math.round(100 * checkedCount / items.length);
+  document.getElementById('packProgress').style.width = pct + '%';
+  document.getElementById('packPercentLabel').textContent = pct + '% packed (' + checkedCount + '/' + items.length + ')';
 }
 function togglePackItem(id){
   const p = db.packing.find(r => r.id === id);
@@ -1407,12 +1463,13 @@ function deletePackCategory(cat){
   supaFetch('/rest/v1/' + TABLES.packing + '?id=in.(' + idsToRemove.join(',') + ')', { method:'DELETE' }).catch(()=>{});
   saveLocal(); renderPacking();
 }
-function openPackItemModal(id){
+function openPackItemModal(id, presetCategory){
   const p = id ? db.packing.find(r => r.id === id) : null;
+  const categoryValue = p ? (p.category || 'General') : (presetCategory || 'General');
   openModal(`
     <h3>${id ? 'Edit' : 'Add'} packing item</h3>
     <div class="form-row"><label>Item</label><input type="text" id="m-pname" placeholder="e.g. Sunscreen" value="${p ? esc(p.name) : ''}"></div>
-    <div class="form-row"><label>Category</label><input type="text" id="m-pcat" placeholder="e.g. Toiletries" value="${p ? esc(p.category || 'General') : 'General'}"></div>
+    <div class="form-row"><label>Category</label><input type="text" id="m-pcat" placeholder="e.g. Toiletries" value="${esc(categoryValue)}"></div>
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
       <button class="btn btn-primary" onclick="savePackItem(${id ? `'${id}'` : 'null'})">${id ? 'Save' : 'Add'}</button>
