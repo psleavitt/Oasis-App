@@ -775,11 +775,30 @@ function loadLocal(){
   try{
     const raw = localStorage.getItem(localKey());
     if(raw){ db = Object.assign(db, JSON.parse(raw)); }
+    const rawDel = localStorage.getItem('oasis_deletes_' + familyCode);
+    if(rawDel){ pendingDeletes = Object.assign(emptyDeletes(), JSON.parse(rawDel)); }
   }catch(e){ console.error('Oasis: local load failed', e); }
 }
 function saveLocal(){
-  try{ localStorage.setItem(localKey(), JSON.stringify(db)); }
+  try{
+    localStorage.setItem(localKey(), JSON.stringify(db));
+    localStorage.setItem('oasis_deletes_' + familyCode, JSON.stringify(pendingDeletes));
+  }
   catch(e){ console.error('Oasis: local save failed', e); }
+}
+function emptyDeletes(){
+  const o = {};
+  Object.keys(TABLES).forEach(k => o[k] = []);
+  return o;
+}
+let pendingDeletes = emptyDeletes();
+// Queue a deletion so it survives connection failures and retries until the
+// server confirms. Rows are already removed from local db by the caller.
+function queueDelete(table, ids){
+  ids = Array.isArray(ids) ? ids : [ids];
+  ids.forEach(id => { if(!pendingDeletes[table].includes(id)) pendingDeletes[table].push(id); });
+  saveLocal();
+  schedulePush();
 }
 
 function markDirty(table, id){
@@ -812,10 +831,21 @@ async function supaFetch(path, options={}){
 
 async function pushAll(){
   if(!familyCode || SUPABASE_ANON_KEY === 'YOUR_SUPABASE_ANON_KEY') return;
-  let anyDirty = Object.values(dirty).some(s => s.size > 0);
-  if(!anyDirty) return;
+  const anyDirty = Object.values(dirty).some(s => s.size > 0);
+  const anyDeletes = Object.values(pendingDeletes).some(a => a.length > 0);
+  if(!anyDirty && !anyDeletes) return;
   setSyncStatus('syncing');
   let hadError = false;
+  // Process queued deletions first, so a delete followed by a re-add can't reverse order
+  for(const key of Object.keys(TABLES)){
+    const delIds = pendingDeletes[key];
+    if(delIds.length === 0) continue;
+    try{
+      const res = await supaFetch('/rest/v1/' + TABLES[key] + '?id=in.(' + delIds.join(',') + ')', { method:'DELETE' });
+      if(res.ok){ pendingDeletes[key] = []; }
+      else { hadError = true; }
+    }catch(e){ hadError = true; }
+  }
   for(const key of Object.keys(TABLES)){
     const ids = Array.from(dirty[key]);
     if(ids.length === 0) continue;
@@ -848,6 +878,7 @@ async function pullAll(){
       const rows = await res.json();
       rows.forEach(remote => {
         if(dirty[key].has(remote.id)) return; // local pending change wins for now
+        if(pendingDeletes[key].includes(remote.id)) return; // locally deleted, awaiting server confirm
         const idx = db[key].findIndex(r => r.id === remote.id);
         if(idx === -1){ db[key].push(remote); }
         else {
@@ -856,6 +887,18 @@ async function pullAll(){
             db[key][idx] = remote;
           }
         }
+      });
+      // Remove local rows that no longer exist on the server (deleted from another
+      // device). Guards: keep rows with unsynced local edits (dirty), and rows
+      // written in the last 60s — protects a just-created row from being removed
+      // if this pull's snapshot was taken before its push landed.
+      const remoteIds = new Set(rows.map(r => r.id));
+      const recentCutoff = Date.now() - 60000;
+      db[key] = db[key].filter(local => {
+        if(remoteIds.has(local.id)) return true;
+        if(dirty[key].has(local.id)) return true;
+        if(local.updated_at && new Date(local.updated_at).getTime() > recentCutoff) return true;
+        return false;
       });
     }
     saveLocal();
@@ -1124,7 +1167,7 @@ function deleteTrip(id){
   db.trips = db.trips.filter(t => t.id !== id);
   ['itinerary','packing'].forEach(key => { db[key] = db[key].filter(r => r.trip_id !== id); });
   dirty.trips.delete(id);
-  supaFetch('/rest/v1/' + TABLES.trips + '?id=eq.' + id, { method:'DELETE' }).catch(()=>{});
+  queueDelete('trips', id);
   saveLocal(); closeModal(); switchTab('trips');
 }
 function seasonFromMonth(month){
@@ -1164,7 +1207,7 @@ function demoteTripToIdea(id){
   db.trips = db.trips.filter(r => r.id !== id);
   ['itinerary','packing'].forEach(key => { db[key] = db[key].filter(r => r.trip_id !== id); });
   dirty.trips.delete(id);
-  supaFetch('/rest/v1/' + TABLES.trips + '?id=eq.' + id, { method:'DELETE' }).catch(()=>{});
+  queueDelete('trips', id);
   saveLocal(); closeModal();
   toast('Moved back to Ideas as "' + row.title + '"');
   switchTab('ideas');
@@ -1352,7 +1395,7 @@ function saveItinItem(id){
 function deleteItinItem(id){
   db.itinerary = db.itinerary.filter(r => r.id !== id);
   dirty.itinerary.delete(id);
-  supaFetch('/rest/v1/' + TABLES.itinerary + '?id=eq.' + id, { method:'DELETE' }).catch(()=>{});
+  queueDelete('itinerary', id);
   saveLocal(); renderItinerary();
 }
 
@@ -1454,7 +1497,7 @@ function togglePackItem(id){
 function deletePackItem(id){
   db.packing = db.packing.filter(r => r.id !== id);
   dirty.packing.delete(id);
-  supaFetch('/rest/v1/' + TABLES.packing + '?id=eq.' + id, { method:'DELETE' }).catch(()=>{});
+  queueDelete('packing', id);
   saveLocal(); renderPacking();
 }
 function deletePackCategory(cat){
@@ -1463,7 +1506,7 @@ function deletePackCategory(cat){
   if(!confirm('Delete the "' + cat + '" category and all ' + idsToRemove.length + ' item' + (idsToRemove.length===1?'':'s') + ' in it?')) return;
   db.packing = db.packing.filter(p => !idsToRemove.includes(p.id));
   idsToRemove.forEach(id => dirty.packing.delete(id));
-  supaFetch('/rest/v1/' + TABLES.packing + '?id=in.(' + idsToRemove.join(',') + ')', { method:'DELETE' }).catch(()=>{});
+  queueDelete('packing', idsToRemove);
   saveLocal(); renderPacking();
 }
 function openPackItemModal(id, presetCategory){
@@ -1625,7 +1668,7 @@ function deleteTemplate(id){
   if(!confirm('Delete this packing template?')) return;
   db.templates = db.templates.filter(t => t.id !== id);
   dirty.templates.delete(id);
-  supaFetch('/rest/v1/' + TABLES.templates + '?id=eq.' + id, { method:'DELETE' }).catch(()=>{});
+  queueDelete('templates', id);
   saveLocal(); closeModal(); renderTemplatesList();
 }
 
@@ -1956,7 +1999,7 @@ function saveIdea(id){
 function deleteIdea(id){
   db.ideas = db.ideas.filter(r => r.id !== id);
   dirty.ideas.delete(id);
-  supaFetch('/rest/v1/' + TABLES.ideas + '?id=eq.' + id, { method:'DELETE' }).catch(()=>{});
+  queueDelete('ideas', id);
   saveLocal(); closeModal(); renderIdeas();
 }
 function promoteIdea(id){
@@ -2069,7 +2112,7 @@ function deleteFavList(id){
   db.favoriteItems = db.favoriteItems.filter(i => i.list_id !== id);
   dirty.favoriteLists.delete(id);
   itemIds.forEach(iid => dirty.favoriteItems.delete(iid));
-  supaFetch('/rest/v1/' + TABLES.favoriteLists + '?id=eq.' + id, { method:'DELETE' }).catch(()=>{});
+  queueDelete('favoriteLists', id);
   saveLocal(); closeModal(); switchTab('favorites');
 }
 function editCurrentFavList(){ openFavListModal(db.favoriteLists.find(l => l.id === currentFavListId)); }
@@ -2162,7 +2205,7 @@ function saveFavItem(id){
 function deleteFavItem(id){
   db.favoriteItems = db.favoriteItems.filter(r => r.id !== id);
   dirty.favoriteItems.delete(id);
-  supaFetch('/rest/v1/' + TABLES.favoriteItems + '?id=eq.' + id, { method:'DELETE' }).catch(()=>{});
+  queueDelete('favoriteItems', id);
   renumberFavItems(currentFavListId);
   saveLocal(); closeModal(); renderFavListDetail();
 }
