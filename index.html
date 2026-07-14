@@ -1443,6 +1443,9 @@ function saveBudgetFields(){
 /* =========================================================
    PACKING
    ========================================================= */
+function packSortFn(a,b){
+  return (a.sort_order||0)-(b.sort_order||0) || new Date(a.created_at||0)-new Date(b.created_at||0);
+}
 function renderPacking(){
   const list = document.getElementById('packingList');
   const items = db.packing.filter(p => p.trip_id === currentTripId && !p._deleted);
@@ -1459,7 +1462,9 @@ function renderPacking(){
     if(!groups[cat]){ groups[cat] = []; categoryOrder.push(cat); }
     groups[cat].push(p);
   });
-  list.innerHTML = categoryOrder.map(cat => `
+  list.innerHTML = categoryOrder.map(cat => {
+    const catItems = groups[cat].sort(packSortFn);
+    return `
     <div class="pack-cat">
       <div class="pack-cat-head">
         <div class="pack-cat-title">${esc(cat)}</div>
@@ -1468,8 +1473,12 @@ function renderPacking(){
           <button class="icon-btn pack-cat-delete" data-category="${esc(cat)}">✕ Delete category</button>
         </div>
       </div>
-      ${groups[cat].map(p => `
+      ${catItems.map((p, idx) => `
         <div class="pack-item ${p.checked ? 'checked' : ''}">
+          <div class="rank-reorder">
+            <button ${idx===0?'disabled':''} onclick="movePackItem('${p.id}',-1)">▲</button>
+            <button ${idx===catItems.length-1?'disabled':''} onclick="movePackItem('${p.id}',1)">▼</button>
+          </div>
           <input type="checkbox" ${p.checked ? 'checked' : ''} onchange="togglePackItem('${p.id}')">
           <span class="pack-name">${esc(p.name)}</span>
           <button class="icon-btn" onclick="openPackItemModal('${p.id}')">✎</button>
@@ -1477,7 +1486,8 @@ function renderPacking(){
         </div>
       `).join('')}
     </div>
-  `).join('');
+  `;
+  }).join('');
   list.querySelectorAll('.pack-cat-delete').forEach(btn => {
     btn.addEventListener('click', () => deletePackCategory(btn.dataset.category));
   });
@@ -1488,6 +1498,26 @@ function renderPacking(){
   const pct = Math.round(100 * checkedCount / items.length);
   document.getElementById('packProgress').style.width = pct + '%';
   document.getElementById('packPercentLabel').textContent = pct + '% packed (' + checkedCount + '/' + items.length + ')';
+}
+function movePackItem(id, direction){
+  const item = db.packing.find(p => p.id === id);
+  if(!item) return;
+  const cat = item.category || 'General';
+  const catItems = db.packing
+    .filter(p => p.trip_id === currentTripId && !p._deleted && (p.category || 'General') === cat)
+    .sort(packSortFn);
+  // Normalize to clean sequential sort_order first (older items may all be 0)
+  catItems.forEach((p, i) => {
+    if(p.sort_order !== i + 1){ p.sort_order = i + 1; p.updated_at = nowIso(); markDirty('packing', p.id); }
+  });
+  const idx = catItems.findIndex(p => p.id === id);
+  const swapIdx = idx + direction;
+  if(idx === -1 || swapIdx < 0 || swapIdx >= catItems.length) return;
+  const a = catItems[idx], b = catItems[swapIdx];
+  const tmp = a.sort_order; a.sort_order = b.sort_order; b.sort_order = tmp;
+  a.updated_at = nowIso(); b.updated_at = nowIso();
+  markDirty('packing', a.id); markDirty('packing', b.id);
+  renderPacking();
 }
 function togglePackItem(id){
   const p = db.packing.find(r => r.id === id);
@@ -1523,6 +1553,10 @@ function openPackItemModal(id, presetCategory){
     </div>
   `);
 }
+function nextPackSortOrder(cat){
+  const catItems = db.packing.filter(p => p.trip_id === currentTripId && !p._deleted && (p.category || 'General') === cat);
+  return catItems.reduce((max, p) => Math.max(max, p.sort_order || 0), 0) + 1;
+}
 function savePackItem(id){
   const name = document.getElementById('m-pname').value.trim();
   if(!name) return;
@@ -1532,7 +1566,7 @@ function savePackItem(id){
     p.name = name; p.category = category; p.updated_at = nowIso();
     markDirty('packing', id);
   } else {
-    const row = { id: uid(), family_code: familyCode, trip_id: currentTripId, name, category, checked:false, created_at: nowIso(), updated_at: nowIso() };
+    const row = { id: uid(), family_code: familyCode, trip_id: currentTripId, name, category, checked:false, sort_order: nextPackSortOrder(category), created_at: nowIso(), updated_at: nowIso() };
     db.packing.push(row);
     markDirty('packing', row.id);
   }
@@ -1555,8 +1589,11 @@ function openTemplateModal(){
 }
 function applyTemplate(templateId){
   const t = db.templates.find(x => x.id === templateId);
+  const nextByCat = {};
   t.items.forEach(item => {
-    const row = { id: uid(), family_code: familyCode, trip_id: currentTripId, name: item.name, category: item.category || 'General', checked:false, created_at: nowIso(), updated_at: nowIso() };
+    const cat = item.category || 'General';
+    if(nextByCat[cat] === undefined){ nextByCat[cat] = nextPackSortOrder(cat); }
+    const row = { id: uid(), family_code: familyCode, trip_id: currentTripId, name: item.name, category: cat, checked:false, sort_order: nextByCat[cat]++, created_at: nowIso(), updated_at: nowIso() };
     db.packing.push(row);
     markDirty('packing', row.id);
   });
