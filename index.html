@@ -485,7 +485,7 @@
   .pack-cat-title{ font-size:0.85rem; font-weight:700; color: var(--sea); text-transform:uppercase; letter-spacing:0.04em; }
   .pack-cat-delete{ font-size:0.72rem; white-space:nowrap; }
   .pack-cat-add{ font-size:0.72rem; white-space:nowrap; color: var(--sea); }
-  .pack-item{ display:flex; align-items:center; gap:10px; padding: 7px 0; }
+  .pack-item{ display:flex; align-items:center; gap:8px; padding: 4px 0; }
   .pack-item input[type=checkbox]{ width:18px; height:18px; accent-color: var(--sea); }
   .pack-item.checked .pack-name{ text-decoration: line-through; color: var(--ink-soft); }
   .pack-name{ flex:1; }
@@ -508,6 +508,9 @@
     border-radius:5px; width:24px; height:20px; font-size:0.7rem; line-height:1; padding:0;
   }
   .rank-reorder button:disabled{ opacity:0.3; }
+  /* Compact variant inside packing rows: arrows sit side-by-side within one text line */
+  .pack-item .rank-reorder{ flex-direction:row; gap:3px; }
+  .pack-item .rank-reorder button{ width:22px; height:22px; font-size:0.6rem; }
 
   /* Ideas */
   .idea-card{ position:relative; }
