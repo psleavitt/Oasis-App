@@ -660,6 +660,7 @@
             <button class="btn btn-ghost btn-sm" onclick="openTemplateModal()">Use template</button>
             <button class="btn btn-ghost btn-sm" onclick="saveTripPackingAsTemplate()">Save as template</button>
             <button class="btn btn-ghost btn-sm" onclick="openPackItemModal()">+ Add item</button>
+            <button class="btn btn-ghost btn-sm" id="packReorderToggle" onclick="togglePackReorderMode()">Reorder</button>
           </div>
         </div>
         <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:6px;">
@@ -777,7 +778,14 @@ function localKey(){ return 'oasis_data_' + familyCode; }
 function loadLocal(){
   try{
     const raw = localStorage.getItem(localKey());
-    if(raw){ db = Object.assign(db, JSON.parse(raw)); }
+    if(raw){
+      const parsed = JSON.parse(raw);
+      // Only accept known tables — silently drops stale keys left over from
+      // retired features (e.g. old rankings/schedule data on older devices)
+      Object.keys(TABLES).forEach(k => {
+        if(Array.isArray(parsed[k])) db[k] = parsed[k];
+      });
+    }
     const rawDel = localStorage.getItem('oasis_deletes_' + familyCode);
     if(rawDel){ pendingDeletes = Object.assign(emptyDeletes(), JSON.parse(rawDel)); }
   }catch(e){ console.error('Oasis: local load failed', e); }
@@ -1197,6 +1205,7 @@ function demoteTripToIdea(id){
     const d = new Date(t.start_date + 'T00:00:00');
     target_year = d.getFullYear();
     target_season = seasonFromMonth(d.getMonth() + 1);
+    if(d.getMonth() + 1 === 12){ target_year += 1; } // December = the following year's Winter
   }
   const row = {
     id: uid(), family_code: familyCode, title: t.name, notes: t.cover_note || '',
@@ -1220,6 +1229,9 @@ function editCurrentTrip(){ openTripModal(db.trips.find(t => t.id === currentTri
 
 function openTripDetail(id){
   currentTripId = id;
+  packReorderMode = false;
+  const reorderBtn = document.getElementById('packReorderToggle');
+  if(reorderBtn) reorderBtn.textContent = 'Reorder';
   switchTab('tripDetail');
   switchSubtab('itinerary');
 }
@@ -1258,10 +1270,10 @@ function renderGlanceCountdown(){
   const start = new Date(next.start_date + 'T00:00:00');
   const days = Math.round((start - today) / 86400000);
   let phrase;
-  if(days === 0) phrase = `<span class="num">Today!</span>`;
-  else if(days === 1) phrase = `<span class="num">Tomorrow!</span>`;
+  if(days === 0) phrase = `<span class="num">Today:</span>`;
+  else if(days === 1) phrase = `<span class="num">Tomorrow:</span>`;
   else phrase = `<span class="num">${days} days</span> until`;
-  el.innerHTML = `<div class="glance-countdown">${next.emoji || '🧳'} ${phrase} ${days > 1 ? esc(next.name) : ''}</div>`;
+  el.innerHTML = `<div class="glance-countdown">${next.emoji || '🧳'} ${phrase} ${esc(next.name)}</div>`;
 }
 function renderGlance(){
   const sel = document.getElementById('glanceTripSelect');
@@ -1446,6 +1458,13 @@ function saveBudgetFields(){
 /* =========================================================
    PACKING
    ========================================================= */
+let packReorderMode = false;
+function togglePackReorderMode(){
+  packReorderMode = !packReorderMode;
+  const btn = document.getElementById('packReorderToggle');
+  if(btn) btn.textContent = packReorderMode ? 'Done' : 'Reorder';
+  renderPacking();
+}
 function packSortFn(a,b){
   return (a.sort_order||0)-(b.sort_order||0) || new Date(a.created_at||0)-new Date(b.created_at||0);
 }
@@ -1478,10 +1497,11 @@ function renderPacking(){
       </div>
       ${catItems.map((p, idx) => `
         <div class="pack-item ${p.checked ? 'checked' : ''}">
+          ${packReorderMode ? `
           <div class="rank-reorder">
             <button ${idx===0?'disabled':''} onclick="movePackItem('${p.id}',-1)">▲</button>
             <button ${idx===catItems.length-1?'disabled':''} onclick="movePackItem('${p.id}',1)">▼</button>
-          </div>
+          </div>` : ''}
           <input type="checkbox" ${p.checked ? 'checked' : ''} onchange="togglePackItem('${p.id}')">
           <span class="pack-name">${esc(p.name)}</span>
           <button class="icon-btn" onclick="openPackItemModal('${p.id}')">✎</button>
@@ -1902,12 +1922,13 @@ function seasonKey(year, season){
 function currentSeasonKey(){
   const now = new Date();
   const month = now.getMonth() + 1; // 1-12
-  let idx;
-  if(month === 12 || month <= 2) idx = 0;       // Winter
+  let idx, year = now.getFullYear();
+  if(month === 12){ idx = 0; year += 1; }      // December = the following year's Winter
+  else if(month <= 2) idx = 0;                  // Winter
   else if(month <= 5) idx = 1;                  // Spring
   else if(month <= 8) idx = 2;                  // Summer
   else idx = 3;                                 // Fall
-  return now.getFullYear() * 4 + idx;
+  return year * 4 + idx;
 }
 
 function renderIdeaSeasonGlance(){
@@ -2075,10 +2096,16 @@ function renderFavoriteFilters(){
   const categories = [...new Set(lists.map(l => l.category).filter(Boolean))].sort();
   const personWrap = document.getElementById('favPersonChips');
   personWrap.innerHTML = [['all','All people'], ...persons.map(p => [p,p])]
-    .map(([key,label]) => `<button class="filter-chip ${favPersonFilter===key?'active':''}" onclick="setFavPersonFilter('${esc(key)}')">${esc(label)}</button>`).join('');
+    .map(([key,label]) => `<button class="filter-chip ${favPersonFilter===key?'active':''}" data-filter="${esc(key)}">${esc(label)}</button>`).join('');
+  personWrap.querySelectorAll('.filter-chip').forEach(btn => {
+    btn.addEventListener('click', () => setFavPersonFilter(btn.dataset.filter));
+  });
   const catWrap = document.getElementById('favCategoryChips');
   catWrap.innerHTML = [['all','All categories'], ...categories.map(c => [c,c])]
-    .map(([key,label]) => `<button class="filter-chip ${favCategoryFilter===key?'active':''}" onclick="setFavCategoryFilter('${esc(key)}')">${esc(label)}</button>`).join('');
+    .map(([key,label]) => `<button class="filter-chip ${favCategoryFilter===key?'active':''}" data-filter="${esc(key)}">${esc(label)}</button>`).join('');
+  catWrap.querySelectorAll('.filter-chip').forEach(btn => {
+    btn.addEventListener('click', () => setFavCategoryFilter(btn.dataset.filter));
+  });
 }
 function setFavPersonFilter(val){ favPersonFilter = val; renderFavLists(); }
 function setFavCategoryFilter(val){ favCategoryFilter = val; renderFavLists(); }
