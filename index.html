@@ -936,6 +936,7 @@ function createNewCode(){
 }
 function switchCode(){
   if(confirm('Switch to a different family sync code? Your current data stays saved on this device.')){
+    document.getElementById('join-code').value = familyCode;
     document.getElementById('gate').style.display = 'flex';
     document.getElementById('app').style.display = 'none';
     clearInterval(pullTimer);
@@ -2214,7 +2215,10 @@ function deleteFavItem(id){
    Init
    ========================================================= */
 if(familyCode){
+  // A code is already saved on this device — skip the gate and go straight in.
+  // The ⇄ button in the top bar returns to the gate to switch codes.
   document.getElementById('join-code').value = familyCode;
+  enterApp(familyCode);
 }
 if('serviceWorker' in navigator){
   window.addEventListener('load', () => {
