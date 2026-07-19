@@ -551,6 +551,8 @@
   /* Compact variant inside packing rows: arrows sit side-by-side within one text line */
   .pack-item .rank-reorder{ flex-direction:row; gap:3px; }
   .pack-item .rank-reorder button{ width:22px; height:22px; font-size:0.6rem; }
+  .rank-reorder-compact{ flex-direction:row; gap:3px; }
+  .rank-reorder-compact button{ width:22px; height:22px; font-size:0.6rem; }
 
   /* Ideas */
   .idea-card{ position:relative; }
@@ -802,6 +804,7 @@
         </div>
         <div style="display:flex; gap:8px; flex-wrap:wrap;">
           <button class="btn btn-ghost btn-sm" onclick="openTemplateRenameModal()">Rename</button>
+          <button class="btn btn-ghost btn-sm" id="templateReorderToggle" onclick="toggleTemplateReorderMode()">Reorder</button>
           <button class="btn btn-ghost btn-sm" onclick="openTemplateItemModal()">+ Add item</button>
         </div>
       </div>
@@ -1873,6 +1876,9 @@ function renderTemplatesList(){
 function openTemplateDetail(id){
   currentTemplateId = id;
   editingTemplateItemIdx = null;
+  templateReorderMode = false;
+  const reorderBtn = document.getElementById('templateReorderToggle');
+  if(reorderBtn) reorderBtn.textContent = 'Reorder';
   switchTab('templateDetail');
 }
 function renderTemplateDetail(){
@@ -1880,6 +1886,13 @@ function renderTemplateDetail(){
   if(!t){ switchTab('packingTemplates'); return; }
   document.getElementById('templateDetailName').textContent = t.name;
   document.getElementById('templateDetailMeta').textContent = t.items.length + ' item' + (t.items.length===1?'':'s') + ' — used whenever this template is applied to a trip';
+  renderTemplateItems();
+}
+let templateReorderMode = false;
+function toggleTemplateReorderMode(){
+  templateReorderMode = !templateReorderMode;
+  const btn = document.getElementById('templateReorderToggle');
+  if(btn) btn.textContent = templateReorderMode ? 'Done' : 'Reorder';
   renderTemplateItems();
 }
 function renderTemplateItems(){
@@ -1897,14 +1910,26 @@ function renderTemplateItems(){
     if(!groups[cat]){ groups[cat] = []; categoryOrder.push(cat); }
     groups[cat].push({ item, idx });
   });
-  wrap.innerHTML = categoryOrder.map(cat => `
+  wrap.innerHTML = categoryOrder.map((cat, catPos) => `
     <div class="pack-cat">
       <div class="pack-cat-head">
-        <div class="pack-cat-title">${esc(cat)}</div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          ${templateReorderMode ? `
+          <div class="rank-reorder rank-reorder-compact">
+            <button ${catPos===0?'disabled':''} class="tmpl-cat-up" data-category="${esc(cat)}">▲</button>
+            <button ${catPos===categoryOrder.length-1?'disabled':''} class="tmpl-cat-down" data-category="${esc(cat)}">▼</button>
+          </div>` : ''}
+          <div class="pack-cat-title">${esc(cat)}</div>
+        </div>
         <button class="icon-btn tmpl-cat-delete" data-category="${esc(cat)}">✕ Delete category</button>
       </div>
-      ${groups[cat].map(({item, idx}) => `
+      ${groups[cat].map(({item, idx}, pos) => `
         <div class="pack-item">
+          ${templateReorderMode ? `
+          <div class="rank-reorder">
+            <button ${pos===0?'disabled':''} onclick="moveTemplateItem(${idx},-1)">▲</button>
+            <button ${pos===groups[cat].length-1?'disabled':''} onclick="moveTemplateItem(${idx},1)">▼</button>
+          </div>` : ''}
           ${idx === editingTemplateItemIdx ?
             `<input type="text" class="pack-inline-edit" id="templateEditInput" value="${esc(item.name)}" onkeydown="templateItemEditKey(event,${idx})" onblur="saveTemplateItemEdit(${idx})">` :
             `<span class="pack-name pack-name-tappable" onclick="startTemplateItemEdit(${idx})">${esc(item.name)}</span>`}
@@ -1918,6 +1943,12 @@ function renderTemplateItems(){
   `).join('');
   wrap.querySelectorAll('.tmpl-cat-delete').forEach(btn => {
     btn.addEventListener('click', () => deleteTemplateCategory(btn.dataset.category));
+  });
+  wrap.querySelectorAll('.tmpl-cat-up').forEach(btn => {
+    btn.addEventListener('click', () => moveTemplateCategory(btn.dataset.category, -1));
+  });
+  wrap.querySelectorAll('.tmpl-cat-down').forEach(btn => {
+    btn.addEventListener('click', () => moveTemplateCategory(btn.dataset.category, 1));
   });
   wrap.querySelectorAll('.tmpl-quick-add').forEach(input => {
     input.addEventListener('keydown', (e) => {
@@ -1941,6 +1972,41 @@ function renderTemplateItems(){
     const editInput = document.getElementById('templateEditInput');
     if(editInput){ editInput.focus(); editInput.setSelectionRange(editInput.value.length, editInput.value.length); }
   }
+}
+function moveTemplateItem(globalIdx, direction){
+  const t = db.templates.find(x => x.id === currentTemplateId);
+  if(!t || !t.items[globalIdx]) return;
+  const cat = t.items[globalIdx].category || 'General';
+  const catIndices = t.items.map((it, i) => ({ it, i })).filter(x => (x.it.category || 'General') === cat).map(x => x.i);
+  const pos = catIndices.indexOf(globalIdx);
+  const swapPos = pos + direction;
+  if(pos === -1 || swapPos < 0 || swapPos >= catIndices.length) return;
+  const otherIdx = catIndices[swapPos];
+  [t.items[globalIdx], t.items[otherIdx]] = [t.items[otherIdx], t.items[globalIdx]];
+  t.updated_at = nowIso();
+  markDirty('templates', t.id);
+  editingTemplateItemIdx = null;
+  renderTemplateItems();
+}
+function moveTemplateCategory(cat, direction){
+  const t = db.templates.find(x => x.id === currentTemplateId);
+  if(!t) return;
+  const groups = {};
+  const order = [];
+  t.items.forEach(item => {
+    const c = item.category || 'General';
+    if(!groups[c]){ groups[c] = []; order.push(c); }
+    groups[c].push(item);
+  });
+  const pos = order.indexOf(cat);
+  const swapPos = pos + direction;
+  if(pos === -1 || swapPos < 0 || swapPos >= order.length) return;
+  [order[pos], order[swapPos]] = [order[swapPos], order[pos]];
+  t.items = order.flatMap(c => groups[c]);
+  t.updated_at = nowIso();
+  markDirty('templates', t.id);
+  editingTemplateItemIdx = null;
+  renderTemplateItems();
 }
 function startTemplateItemEdit(idx){
   editingTemplateItemIdx = idx;
