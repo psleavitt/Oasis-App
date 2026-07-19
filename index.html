@@ -484,7 +484,38 @@
   .pack-cat-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
   .pack-cat-title{ font-size:0.85rem; font-weight:700; color: var(--sea); text-transform:uppercase; letter-spacing:0.04em; }
   .pack-cat-delete{ font-size:0.72rem; white-space:nowrap; }
-  .pack-cat-add{ font-size:0.72rem; white-space:nowrap; color: var(--sea); }
+  .pack-name-tappable{ cursor:pointer; }
+  .itin-body-tappable{ cursor:pointer; }
+
+  /* Inline quick-add inputs */
+  .quick-add{ padding: 4px 0 2px; }
+  .quick-add input{
+    width:100%;
+    padding: 7px 10px;
+    border-radius: 8px;
+    border: 1px dashed var(--paper-darker);
+    background: transparent;
+    color: var(--ink);
+    font-size: 0.86rem;
+  }
+  .quick-add input:focus{ background: var(--paper); border-style: solid; }
+  .quick-add input::placeholder{ color: var(--ink-soft); opacity:0.7; }
+  .quick-add-itin{ margin-left: 76px; margin-top: 2px; }
+  @media (max-width: 520px){ .quick-add-itin{ margin-left: 0; } }
+
+  /* Trip wishlist (Ideas subtab) */
+  .wishlist-item{ display:flex; align-items:center; gap:8px; padding: 7px 0; border-bottom: 1px solid var(--paper-darker); }
+  .wishlist-item:last-child{ border-bottom:none; }
+  .wishlist-text{ flex:1; cursor:pointer; }
+  .wishlist-item input{
+    flex:1;
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--sea-soft);
+    background: var(--paper);
+    color: var(--ink);
+    font-size: 0.92rem;
+  }
   .pack-item{ display:flex; align-items:center; gap:8px; padding: 4px 0; }
   .pack-item input[type=checkbox]{ width:18px; height:18px; accent-color: var(--sea); }
   .pack-item.checked .pack-name{ text-decoration: line-through; color: var(--ink-soft); }
@@ -619,6 +650,7 @@
 
       <div class="subtabs">
         <button class="subtab-btn active" data-sub="itinerary" onclick="switchSubtab('itinerary')">Itinerary</button>
+        <button class="subtab-btn" data-sub="tripideas" onclick="switchSubtab('tripideas')">Ideas</button>
         <button class="subtab-btn" data-sub="budget" onclick="switchSubtab('budget')">Budget</button>
         <button class="subtab-btn" data-sub="packing" onclick="switchSubtab('packing')">Packing</button>
       </div>
@@ -629,6 +661,18 @@
           <button class="btn btn-ghost btn-sm" onclick="openItinItemModal()">+ Add item</button>
         </div>
         <div id="itineraryList"></div>
+      </div>
+
+      <div class="subview" id="sub-tripideas">
+        <div class="section-head" style="margin-bottom:10px;">
+          <div class="section-sub">Loose ideas for this trip — not on the official itinerary yet</div>
+        </div>
+        <div class="card">
+          <div class="quick-add">
+            <input type="text" id="wishlistQuickAdd" placeholder="Add an idea and press Enter…" onkeydown="wishlistQuickAddKey(event)">
+          </div>
+          <div id="wishlistList"></div>
+        </div>
       </div>
 
       <div class="subview" id="sub-budget">
@@ -760,12 +804,13 @@ const TABLES = {
   templates: 'oasis_packing_templates',
   favoriteLists: 'oasis_favorite_lists',
   favoriteItems: 'oasis_favorite_items',
-  ideas: 'oasis_trip_ideas'
+  ideas: 'oasis_trip_ideas',
+  wishlist: 'oasis_trip_wishlist'
 };
 
 let familyCode = localStorage.getItem('oasis_active_code') || '';
-let db = { trips:[], itinerary:[], packing:[], templates:[], favoriteLists:[], favoriteItems:[], ideas:[] };
-let dirty = { trips:new Set(), itinerary:new Set(), packing:new Set(), templates:new Set(), favoriteLists:new Set(), favoriteItems:new Set(), ideas:new Set() };
+let db = { trips:[], itinerary:[], packing:[], templates:[], favoriteLists:[], favoriteItems:[], ideas:[], wishlist:[] };
+let dirty = { trips:new Set(), itinerary:new Set(), packing:new Set(), templates:new Set(), favoriteLists:new Set(), favoriteItems:new Set(), ideas:new Set(), wishlist:new Set() };
 let currentTripId = null;
 let pushTimer = null;
 let pullTimer = null;
@@ -1022,6 +1067,7 @@ function switchSubtab(sub){
   document.getElementById('sub-' + sub).classList.add('active');
   document.querySelector('.subtab-btn[data-sub="' + sub + '"]').classList.add('active');
   if(sub === 'itinerary') renderItinerary();
+  else if(sub === 'tripideas') renderWishlist();
   else if(sub === 'budget') renderBudget();
   else if(sub === 'packing') renderPacking();
 }
@@ -1177,7 +1223,7 @@ function saveTrip(id){
 function deleteTrip(id){
   if(!confirm('Delete this trip and all its itinerary and packing items?')) return;
   db.trips = db.trips.filter(t => t.id !== id);
-  ['itinerary','packing'].forEach(key => { db[key] = db[key].filter(r => r.trip_id !== id); });
+  ['itinerary','packing','wishlist'].forEach(key => { db[key] = db[key].filter(r => r.trip_id !== id); });
   dirty.trips.delete(id);
   queueDelete('trips', id);
   saveLocal(); closeModal(); switchTab('trips');
@@ -1218,7 +1264,7 @@ function demoteTripToIdea(id){
   markDirty('ideas', row.id);
 
   db.trips = db.trips.filter(r => r.id !== id);
-  ['itinerary','packing'].forEach(key => { db[key] = db[key].filter(r => r.trip_id !== id); });
+  ['itinerary','packing','wishlist'].forEach(key => { db[key] = db[key].filter(r => r.trip_id !== id); });
   dirty.trips.delete(id);
   queueDelete('trips', id);
   saveLocal(); closeModal();
@@ -1244,7 +1290,7 @@ function renderTripDetail(){
   const pill = document.getElementById('tdStatusPill');
   pill.textContent = STATUS_LABELS[status];
   pill.className = 'status-pill status-' + status;
-  renderItinerary(); renderBudget(); renderPacking();
+  renderItinerary(); renderWishlist(); renderBudget(); renderPacking();
 }
 
 /* =========================================================
@@ -1339,6 +1385,7 @@ function renderGlance(){
 /* =========================================================
    ITINERARY
    ========================================================= */
+let lastItinQuickAddDay = null;
 function renderItinerary(){
   const list = document.getElementById('itineraryList');
   const items = db.itinerary.filter(i => i.trip_id === currentTripId && !i._deleted);
@@ -1358,19 +1405,45 @@ function renderItinerary(){
       ${rows.map(i => `
         <div class="itin-item">
           <div class="itin-time">${i.time ? fmtTime(i.time) : ''}</div>
-          <div class="itin-body">
+          <div class="itin-body itin-body-tappable" onclick="openItinItemModal('${i.id}')">
             <div class="itin-title">${esc(i.title)}</div>
             ${i.location ? `<div class="itin-loc">${esc(i.location)}</div>` : ''}
             ${i.notes ? `<div class="itin-notes">${esc(i.notes)}</div>` : ''}
           </div>
           <div class="item-actions">
-            <button class="icon-btn" onclick="openItinItemModal('${i.id}')">✎</button>
             <button class="icon-btn" onclick="deleteItinItem('${i.id}')">✕</button>
           </div>
         </div>
       `).join('')}
+      <div class="quick-add quick-add-itin">
+        <input type="text" class="itin-quick-add" data-day="${day}" placeholder="Quick add to this day…">
+      </div>
     </div>`;
   }).join('');
+  list.querySelectorAll('.itin-quick-add').forEach(input => {
+    input.addEventListener('keydown', (e) => {
+      if(e.key !== 'Enter') return;
+      const title = input.value.trim();
+      if(!title) return;
+      const day = input.dataset.day;
+      const row = {
+        id: uid(), family_code: familyCode, trip_id: currentTripId,
+        day_date: day === 'Unscheduled' ? null : day,
+        time: '', title, location: '', notes: '',
+        sort_order: db.itinerary.length,
+        created_at: nowIso(), updated_at: nowIso()
+      };
+      db.itinerary.push(row);
+      markDirty('itinerary', row.id);
+      lastItinQuickAddDay = day;
+      renderItinerary();
+    });
+  });
+  if(lastItinQuickAddDay){
+    const again = list.querySelector('.itin-quick-add[data-day="' + CSS.escape(lastItinQuickAddDay) + '"]');
+    if(again) again.focus();
+    lastItinQuickAddDay = null;
+  }
 }
 function openItinItemModal(id){
   const item = id ? db.itinerary.find(r => r.id === id) : { day_date:'', time:'', title:'', location:'', notes:'' };
@@ -1468,6 +1541,7 @@ function togglePackReorderMode(){
 function packSortFn(a,b){
   return (a.sort_order||0)-(b.sort_order||0) || new Date(a.created_at||0)-new Date(b.created_at||0);
 }
+let lastPackQuickAddCat = null;
 function renderPacking(){
   const list = document.getElementById('packingList');
   const items = db.packing.filter(p => p.trip_id === currentTripId && !p._deleted);
@@ -1490,10 +1564,7 @@ function renderPacking(){
     <div class="pack-cat">
       <div class="pack-cat-head">
         <div class="pack-cat-title">${esc(cat)}</div>
-        <div style="display:flex; gap:6px;">
-          <button class="icon-btn pack-cat-add" data-category="${esc(cat)}">+ Add item</button>
-          <button class="icon-btn pack-cat-delete" data-category="${esc(cat)}">✕ Delete category</button>
-        </div>
+        <button class="icon-btn pack-cat-delete" data-category="${esc(cat)}">✕ Delete category</button>
       </div>
       ${catItems.map((p, idx) => `
         <div class="pack-item ${p.checked ? 'checked' : ''}">
@@ -1503,20 +1574,38 @@ function renderPacking(){
             <button ${idx===catItems.length-1?'disabled':''} onclick="movePackItem('${p.id}',1)">▼</button>
           </div>` : ''}
           <input type="checkbox" ${p.checked ? 'checked' : ''} onchange="togglePackItem('${p.id}')">
-          <span class="pack-name">${esc(p.name)}</span>
-          <button class="icon-btn" onclick="openPackItemModal('${p.id}')">✎</button>
+          <span class="pack-name pack-name-tappable" onclick="openPackItemModal('${p.id}')">${esc(p.name)}</span>
           <button class="icon-btn" onclick="deletePackItem('${p.id}')">✕</button>
         </div>
       `).join('')}
+      <div class="quick-add">
+        <input type="text" class="pack-quick-add" data-category="${esc(cat)}" placeholder="Add to ${esc(cat)}…">
+      </div>
     </div>
   `;
   }).join('');
   list.querySelectorAll('.pack-cat-delete').forEach(btn => {
     btn.addEventListener('click', () => deletePackCategory(btn.dataset.category));
   });
-  list.querySelectorAll('.pack-cat-add').forEach(btn => {
-    btn.addEventListener('click', () => openPackItemModal(null, btn.dataset.category));
+  list.querySelectorAll('.pack-quick-add').forEach(input => {
+    input.addEventListener('keydown', (e) => {
+      if(e.key !== 'Enter') return;
+      const name = input.value.trim();
+      if(!name) return;
+      const cat = input.dataset.category;
+      const row = { id: uid(), family_code: familyCode, trip_id: currentTripId, name, category: cat, checked:false, sort_order: nextPackSortOrder(cat), created_at: nowIso(), updated_at: nowIso() };
+      db.packing.push(row);
+      markDirty('packing', row.id);
+      lastPackQuickAddCat = cat;
+      renderPacking();
+    });
   });
+  // After a quick-add re-render, put focus back in the same category's input
+  if(lastPackQuickAddCat){
+    const again = list.querySelector('.pack-quick-add[data-category="' + CSS.escape(lastPackQuickAddCat) + '"]');
+    if(again) again.focus();
+    lastPackQuickAddCat = null;
+  }
   const checkedCount = items.filter(p => p.checked).length;
   const pct = Math.round(100 * checkedCount / items.length);
   document.getElementById('packProgress').style.width = pct + '%';
@@ -1621,6 +1710,82 @@ function applyTemplate(templateId){
     markDirty('packing', row.id);
   });
   closeModal(); renderPacking(); toast('Template added');
+}
+
+/* =========================================================
+   TRIP IDEAS (wishlist) — loose per-trip notes with quick add
+   ========================================================= */
+let editingWishlistId = null;
+function renderWishlist(){
+  const wrap = document.getElementById('wishlistList');
+  const items = db.wishlist.filter(w => w.trip_id === currentTripId && !w._deleted)
+    .sort((a,b) => (a.sort_order||0)-(b.sort_order||0) || new Date(a.created_at||0)-new Date(b.created_at||0));
+  if(items.length === 0){
+    wrap.innerHTML = `<div class="trip-meta" style="padding:10px 0;">Nothing yet — jot down anything you might want to do.</div>`;
+    return;
+  }
+  wrap.innerHTML = items.map(w => {
+    if(w.id === editingWishlistId){
+      return `
+      <div class="wishlist-item">
+        <input type="text" id="wishlistEditInput" value="${esc(w.content)}"
+          onkeydown="wishlistEditKey(event,'${w.id}')" onblur="saveWishlistEdit('${w.id}')">
+      </div>`;
+    }
+    return `
+    <div class="wishlist-item">
+      <span class="wishlist-text" onclick="startWishlistEdit('${w.id}')">${esc(w.content)}</span>
+      <button class="icon-btn" onclick="deleteWishlistItem('${w.id}')">✕</button>
+    </div>`;
+  }).join('');
+  if(editingWishlistId){
+    const input = document.getElementById('wishlistEditInput');
+    if(input){ input.focus(); input.setSelectionRange(input.value.length, input.value.length); }
+  }
+}
+function wishlistQuickAddKey(e){
+  if(e.key !== 'Enter') return;
+  const input = document.getElementById('wishlistQuickAdd');
+  const content = input.value.trim();
+  if(!content) return;
+  const existing = db.wishlist.filter(w => w.trip_id === currentTripId && !w._deleted);
+  const row = {
+    id: uid(), family_code: familyCode, trip_id: currentTripId, content,
+    sort_order: existing.reduce((m,w) => Math.max(m, w.sort_order||0), 0) + 1,
+    created_at: nowIso(), updated_at: nowIso()
+  };
+  db.wishlist.push(row);
+  markDirty('wishlist', row.id);
+  input.value = '';
+  renderWishlist();
+  input.focus();
+}
+function startWishlistEdit(id){
+  editingWishlistId = id;
+  renderWishlist();
+}
+function wishlistEditKey(e, id){
+  if(e.key === 'Enter'){ e.target.blur(); }
+  else if(e.key === 'Escape'){ editingWishlistId = null; renderWishlist(); }
+}
+function saveWishlistEdit(id){
+  if(editingWishlistId !== id) return;
+  const input = document.getElementById('wishlistEditInput');
+  editingWishlistId = null;
+  if(!input){ renderWishlist(); return; }
+  const content = input.value.trim();
+  const w = db.wishlist.find(x => x.id === id);
+  if(w && content && content !== w.content){
+    w.content = content; w.updated_at = nowIso();
+    markDirty('wishlist', id);
+  }
+  renderWishlist();
+}
+function deleteWishlistItem(id){
+  db.wishlist = db.wishlist.filter(w => w.id !== id);
+  dirty.wishlist.delete(id);
+  queueDelete('wishlist', id);
+  saveLocal(); renderWishlist();
 }
 
 /* =========================================================
