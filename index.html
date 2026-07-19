@@ -616,6 +616,7 @@
     <button class="tab-btn" data-view="ideas" onclick="switchTab('ideas')">Ideas</button>
     <button class="tab-btn" data-view="favorites" onclick="switchTab('favorites')">Favorites</button>
     <button class="tab-btn" data-view="packingTemplates" onclick="switchTab('packingTemplates')">Packing Lists</button>
+    <button class="tab-btn" data-view="history" onclick="switchTab('history')">History</button>
   </div>
 
   <main>
@@ -810,6 +811,19 @@
       </div>
       <div id="templateItemsList"></div>
     </div>
+
+    <!-- ===== HISTORY VIEW ===== -->
+    <div class="view" id="view-history">
+      <div class="section-head">
+        <div>
+          <h2>History</h2>
+          <div class="section-sub">Every trip you've taken — completed trips land here automatically.</div>
+        </div>
+        <button class="btn btn-primary" onclick="openHistoryModal()">+ Add past trip</button>
+      </div>
+      <div id="historyDash"></div>
+      <div id="historyList"></div>
+    </div>
   </main>
 </div>
 
@@ -833,12 +847,13 @@ const TABLES = {
   favoriteLists: 'oasis_favorite_lists',
   favoriteItems: 'oasis_favorite_items',
   ideas: 'oasis_trip_ideas',
-  wishlist: 'oasis_trip_wishlist'
+  wishlist: 'oasis_trip_wishlist',
+  history: 'oasis_trip_history'
 };
 
 let familyCode = localStorage.getItem('oasis_active_code') || '';
-let db = { trips:[], itinerary:[], packing:[], templates:[], favoriteLists:[], favoriteItems:[], ideas:[], wishlist:[] };
-let dirty = { trips:new Set(), itinerary:new Set(), packing:new Set(), templates:new Set(), favoriteLists:new Set(), favoriteItems:new Set(), ideas:new Set(), wishlist:new Set() };
+let db = { trips:[], itinerary:[], packing:[], templates:[], favoriteLists:[], favoriteItems:[], ideas:[], wishlist:[], history:[] };
+let dirty = { trips:new Set(), itinerary:new Set(), packing:new Set(), templates:new Set(), favoriteLists:new Set(), favoriteItems:new Set(), ideas:new Set(), wishlist:new Set(), history:new Set() };
 let currentTripId = null;
 let pushTimer = null;
 let pullTimer = null;
@@ -1087,8 +1102,9 @@ function renderCurrentView(view){
   else if(view === 'favListDetail') renderFavListDetail();
   else if(view === 'packingTemplates') renderTemplatesList();
   else if(view === 'templateDetail') renderTemplateDetail();
+  else if(view === 'history') renderHistory();
 }
-function renderAll(){ renderGlance(); renderTrips(); renderIdeas(); renderFavLists(); renderTemplatesList(); }
+function renderAll(){ renderGlance(); renderTrips(); renderIdeas(); renderFavLists(); renderTemplatesList(); renderHistory(); }
 
 function switchSubtab(sub){
   document.querySelectorAll('.subview').forEach(v => v.classList.remove('active'));
@@ -1843,6 +1859,128 @@ function deleteWishlistItem(id){
   dirty.wishlist.delete(id);
   queueDelete('wishlist', id);
   saveLocal(); renderWishlist();
+}
+
+/* =========================================================
+   HISTORY — completed trips (auto) + manually added past trips
+   ========================================================= */
+function historyEntries(){
+  const auto = db.trips
+    .filter(t => !t._deleted && computeTripStatus(t) === 'past')
+    .map(t => ({
+      source: 'auto', id: t.id, emoji: t.emoji || '🧳',
+      name: t.name, destination: t.destination || '',
+      year: t.end_date ? new Date(t.end_date + 'T00:00:00').getFullYear() : (t.start_date ? new Date(t.start_date + 'T00:00:00').getFullYear() : null),
+      cost: (t.actual_cost != null) ? Number(t.actual_cost) : null
+    }));
+  const manual = db.history
+    .filter(h => !h._deleted)
+    .map(h => ({
+      source: 'manual', id: h.id, emoji: '🧳',
+      name: h.name, destination: h.destination || '',
+      year: h.year || null,
+      cost: (h.total_cost != null) ? Number(h.total_cost) : null
+    }));
+  return [...auto, ...manual].sort((a,b) => (b.year||0) - (a.year||0) || a.name.localeCompare(b.name));
+}
+function renderHistoryDash(entries){
+  const wrap = document.getElementById('historyDash');
+  // Most frequently visited (by destination)
+  const counts = {};
+  entries.forEach(e => {
+    const key = e.destination.trim().toLowerCase();
+    if(!key) return;
+    if(!counts[key]){ counts[key] = { label: e.destination.trim(), count: 0 }; }
+    counts[key].count++;
+  });
+  const topVisited = Object.values(counts).sort((a,b) => b.count - a.count || a.label.localeCompare(b.label)).slice(0,5);
+  // Most expensive
+  const topExpensive = entries.filter(e => e.cost != null).sort((a,b) => b.cost - a.cost).slice(0,5);
+  if(topVisited.length === 0 && topExpensive.length === 0){ wrap.innerHTML = ''; return; }
+  wrap.innerHTML = `<div class="idea-glance-grid" style="margin-bottom:20px;">
+    ${topVisited.length > 0 ? `
+    <div class="idea-glance-card">
+      <div class="idea-glance-head">Most visited</div>
+      ${topVisited.map(v => `<div class="glance-item"><span class="glance-title">${esc(v.label)}</span><span class="glance-time" style="min-width:auto;">${v.count}×</span></div>`).join('')}
+    </div>` : ''}
+    ${topExpensive.length > 0 ? `
+    <div class="idea-glance-card">
+      <div class="idea-glance-head">Most expensive</div>
+      ${topExpensive.map(e => `<div class="glance-item"><span class="glance-title">${esc(e.name)}${e.year ? ` <span class="glance-loc">${e.year}</span>` : ''}</span><span class="glance-time" style="min-width:auto;">${fmtMoney(e.cost)}</span></div>`).join('')}
+    </div>` : ''}
+  </div>`;
+}
+function renderHistory(){
+  const listEl = document.getElementById('historyList');
+  if(!listEl) return;
+  const entries = historyEntries();
+  renderHistoryDash(entries);
+  if(entries.length === 0){
+    listEl.innerHTML = `<div class="empty-state"><h3>No trips in the books yet</h3><p>Completed trips appear here automatically, or add past trips manually.</p></div>`;
+    return;
+  }
+  listEl.innerHTML = entries.map(e => `
+    <div class="card ${e.source === 'auto' ? 'fav-list-card' : ''}" ${e.source === 'auto' ? `onclick="openTripDetail('${e.id}')"` : ''}>
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <span class="trip-emoji" style="font-size:1.4rem;">${e.emoji}</span>
+          <div>
+            <div class="trip-title" style="font-size:1.02rem;">${esc(e.name)}</div>
+            <div class="trip-meta">${[esc(e.destination), e.year].filter(Boolean).join(' · ')}</div>
+          </div>
+        </div>
+        <div style="display:flex; align-items:center; gap:10px;">
+          ${e.cost != null ? `<span class="mono" style="font-weight:700;">${fmtMoney(e.cost)}</span>` : ''}
+          ${e.source === 'manual' ? `
+            <button class="icon-btn" onclick="openHistoryModal('${e.id}')">✎</button>
+            <button class="icon-btn" onclick="deleteHistoryEntry('${e.id}')">✕</button>` : ''}
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+function openHistoryModal(id){
+  const h = id ? db.history.find(x => x.id === id) : { name:'', destination:'', year:'', total_cost:'' };
+  openModal(`
+    <h3>${id ? 'Edit' : 'Add'} past trip</h3>
+    <div class="form-row"><label>Trip name</label><input type="text" id="m-hname" placeholder="e.g. Disneyland 2019" value="${esc(h.name)}"></div>
+    <div class="form-row"><label>Location</label><input type="text" id="m-hdest" placeholder="e.g. Anaheim, CA" value="${esc(h.destination)}"></div>
+    <div class="form-grid">
+      <div class="form-row"><label>Year</label><input type="number" id="m-hyear" placeholder="e.g. 2019" value="${h.year || ''}"></div>
+      <div class="form-row"><label>Total cost (optional)</label><input type="number" step="0.01" id="m-hcost" placeholder="0.00" value="${h.total_cost ?? ''}"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveHistoryEntry(${id ? `'${id}'` : 'null'})">Save</button>
+    </div>
+  `);
+}
+function saveHistoryEntry(id){
+  const yearVal = document.getElementById('m-hyear').value;
+  const costVal = document.getElementById('m-hcost').value;
+  const patch = {
+    name: document.getElementById('m-hname').value.trim() || 'Untitled trip',
+    destination: document.getElementById('m-hdest').value.trim(),
+    year: yearVal ? parseInt(yearVal) : null,
+    total_cost: costVal ? parseFloat(costVal) : null
+  };
+  if(id){
+    const h = db.history.find(x => x.id === id);
+    Object.assign(h, patch); h.updated_at = nowIso();
+    markDirty('history', id);
+  } else {
+    const row = Object.assign({ id: uid(), family_code: familyCode, created_at: nowIso(), updated_at: nowIso() }, patch);
+    db.history.push(row);
+    markDirty('history', row.id);
+  }
+  closeModal(); renderHistory();
+}
+function deleteHistoryEntry(id){
+  if(!confirm('Remove this past trip from history?')) return;
+  db.history = db.history.filter(h => h.id !== id);
+  dirty.history.delete(id);
+  queueDelete('history', id);
+  saveLocal(); renderHistory();
 }
 
 /* =========================================================
