@@ -512,6 +512,22 @@
   .quick-add-itin{ margin-left: 76px; margin-top: 2px; }
   @media (max-width: 520px){ .quick-add-itin{ margin-left: 0; } }
 
+  /* History — compact year-grouped rows */
+  .history-year{ margin-bottom: 14px; }
+  .history-year:last-child{ margin-bottom: 0; }
+  .history-row{
+    display:flex; align-items:center; gap:8px;
+    padding: 4px 0;
+    font-size: 0.9rem;
+  }
+  .history-row-tappable{ cursor:pointer; }
+  .history-row-tappable:hover .history-name{ color: var(--sea); }
+  .history-emoji{ font-size:1rem; line-height:1; }
+  .history-name{ font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .history-dest{ color: var(--ink-soft); font-size:0.8rem; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .history-cost{ font-weight:700; font-size:0.82rem; white-space:nowrap; margin-left:auto; }
+  .history-name + .history-cost{ margin-left:auto; }
+
   /* Trip wishlist (Ideas subtab) */
   .wishlist-item{ display:flex; align-items:center; gap:8px; padding: 7px 0; border-bottom: 1px solid var(--paper-darker); }
   .wishlist-item:last-child{ border-bottom:none; }
@@ -1919,25 +1935,29 @@ function renderHistory(){
     listEl.innerHTML = `<div class="empty-state"><h3>No trips in the books yet</h3><p>Completed trips appear here automatically, or add past trips manually.</p></div>`;
     return;
   }
-  listEl.innerHTML = entries.map(e => `
-    <div class="card ${e.source === 'auto' ? 'fav-list-card' : ''}" ${e.source === 'auto' ? `onclick="openTripDetail('${e.id}')"` : ''}>
-      <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
-        <div style="display:flex; align-items:center; gap:10px;">
-          <span class="trip-emoji" style="font-size:1.4rem;">${e.emoji}</span>
-          <div>
-            <div class="trip-title" style="font-size:1.02rem;">${esc(e.name)}</div>
-            <div class="trip-meta">${[esc(e.destination), e.year].filter(Boolean).join(' · ')}</div>
-          </div>
-        </div>
-        <div style="display:flex; align-items:center; gap:10px;">
-          ${e.cost != null ? `<span class="mono" style="font-weight:700;">${fmtMoney(e.cost)}</span>` : ''}
+  const byYear = {};
+  const yearOrder = [];
+  entries.forEach(e => {
+    const y = e.year || 'Unknown year';
+    if(!byYear[y]){ byYear[y] = []; yearOrder.push(y); }
+    byYear[y].push(e);
+  });
+  listEl.innerHTML = `<div class="card">` + yearOrder.map(y => `
+    <div class="history-year">
+      <div class="day-heading">${y}</div>
+      ${byYear[y].map(e => `
+        <div class="history-row ${e.source === 'auto' ? 'history-row-tappable' : ''}" ${e.source === 'auto' ? `onclick="openTripDetail('${e.id}')"` : ''}>
+          <span class="history-emoji">${e.emoji}</span>
+          <span class="history-name">${esc(e.name)}</span>
+          ${e.destination ? `<span class="history-dest">${esc(e.destination)}</span>` : ''}
+          ${e.cost != null ? `<span class="history-cost mono">${fmtMoney(e.cost)}</span>` : ''}
           ${e.source === 'manual' ? `
             <button class="icon-btn" onclick="openHistoryModal('${e.id}')">✎</button>
             <button class="icon-btn" onclick="deleteHistoryEntry('${e.id}')">✕</button>` : ''}
         </div>
-      </div>
+      `).join('')}
     </div>
-  `).join('');
+  `).join('') + `</div>`;
 }
 function openHistoryModal(id){
   const h = id ? db.history.find(x => x.id === id) : { name:'', destination:'', year:'', total_cost:'' };
