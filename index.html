@@ -1892,7 +1892,7 @@ function historyEntries(){
   const manual = db.history
     .filter(h => !h._deleted)
     .map(h => ({
-      source: 'manual', id: h.id, emoji: '🧳',
+      source: 'manual', id: h.id, emoji: h.emoji || '🧳',
       name: h.name, destination: h.destination || '',
       year: h.year || null,
       cost: (h.total_cost != null) ? Number(h.total_cost) : null
@@ -1911,7 +1911,7 @@ function renderHistoryDash(entries){
   });
   const topVisited = Object.values(counts).sort((a,b) => b.count - a.count || a.label.localeCompare(b.label)).slice(0,5);
   // Most expensive
-  const topExpensive = entries.filter(e => e.cost != null).sort((a,b) => b.cost - a.cost).slice(0,5);
+  const topExpensive = entries.filter(e => e.cost != null).sort((a,b) => b.cost - a.cost).slice(0,10);
   if(topVisited.length === 0 && topExpensive.length === 0){ wrap.innerHTML = ''; return; }
   wrap.innerHTML = `<div class="idea-glance-grid" style="margin-bottom:20px;">
     ${topVisited.length > 0 ? `
@@ -1960,7 +1960,8 @@ function renderHistory(){
   `).join('') + `</div>`;
 }
 function openHistoryModal(id){
-  const h = id ? db.history.find(x => x.id === id) : { name:'', destination:'', year:'', total_cost:'' };
+  const h = id ? db.history.find(x => x.id === id) : { name:'', destination:'', year:'', total_cost:'', emoji:'🧳' };
+  selectedTripEmoji = h.emoji || '🧳';
   openModal(`
     <h3>${id ? 'Edit' : 'Add'} past trip</h3>
     <div class="form-row"><label>Trip name</label><input type="text" id="m-hname" placeholder="e.g. Disneyland 2019" value="${esc(h.name)}"></div>
@@ -1969,11 +1970,14 @@ function openHistoryModal(id){
       <div class="form-row"><label>Year</label><input type="number" id="m-hyear" placeholder="e.g. 2019" value="${h.year || ''}"></div>
       <div class="form-row"><label>Total cost (optional)</label><input type="number" step="0.01" id="m-hcost" placeholder="0.00" value="${h.total_cost ?? ''}"></div>
     </div>
+    <label>Emoji</label>
+    <div class="emoji-grid" id="emojiGrid"></div>
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
       <button class="btn btn-primary" onclick="saveHistoryEntry(${id ? `'${id}'` : 'null'})">Save</button>
     </div>
   `);
+  renderEmojiGrid();
 }
 function saveHistoryEntry(id){
   const yearVal = document.getElementById('m-hyear').value;
@@ -1982,7 +1986,8 @@ function saveHistoryEntry(id){
     name: document.getElementById('m-hname').value.trim() || 'Untitled trip',
     destination: document.getElementById('m-hdest').value.trim(),
     year: yearVal ? parseInt(yearVal) : null,
-    total_cost: costVal ? parseFloat(costVal) : null
+    total_cost: costVal ? parseFloat(costVal) : null,
+    emoji: selectedTripEmoji
   };
   if(id){
     const h = db.history.find(x => x.id === id);
