@@ -485,6 +485,15 @@
   .pack-cat-title{ font-size:0.85rem; font-weight:700; color: var(--sea); text-transform:uppercase; letter-spacing:0.04em; }
   .pack-cat-delete{ font-size:0.72rem; white-space:nowrap; }
   .pack-name-tappable{ cursor:pointer; }
+  .pack-inline-edit{
+    flex:1;
+    padding: 5px 9px;
+    border-radius: 8px;
+    border: 1px solid var(--sea-soft);
+    background: var(--paper);
+    color: var(--ink);
+    font-size: 0.9rem;
+  }
   .itin-body-tappable{ cursor:pointer; }
 
   /* Inline quick-add inputs */
@@ -776,11 +785,27 @@
         <div style="display:flex; gap:8px; flex-wrap:wrap;">
           <button class="btn btn-ghost btn-sm" onclick="exportTemplatesCSV()">Export CSV</button>
           <button class="btn btn-ghost btn-sm" onclick="document.getElementById('templateCsvInput').click()">Import CSV</button>
-          <button class="btn btn-primary" onclick="openTemplateEditModal()">+ New template</button>
+          <button class="btn btn-primary" onclick="openTemplateCreateModal()">+ New template</button>
         </div>
         <input type="file" id="templateCsvInput" accept=".csv" style="display:none;" onchange="importTemplatesCSV(this.files[0])">
       </div>
       <div id="templatesList"></div>
+    </div>
+
+    <!-- ===== TEMPLATE DETAIL VIEW ===== -->
+    <div class="view" id="view-templateDetail">
+      <button class="back-link" onclick="switchTab('packingTemplates')">← Back to packing lists</button>
+      <div class="section-head">
+        <div>
+          <h2 id="templateDetailName"></h2>
+          <div class="section-sub" id="templateDetailMeta"></div>
+        </div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button class="btn btn-ghost btn-sm" onclick="openTemplateRenameModal()">Rename</button>
+          <button class="btn btn-ghost btn-sm" onclick="openTemplateItemModal()">+ Add item</button>
+        </div>
+      </div>
+      <div id="templateItemsList"></div>
     </div>
   </main>
 </div>
@@ -1058,6 +1083,7 @@ function renderCurrentView(view){
   else if(view === 'favorites') renderFavLists();
   else if(view === 'favListDetail') renderFavListDetail();
   else if(view === 'packingTemplates') renderTemplatesList();
+  else if(view === 'templateDetail') renderTemplateDetail();
 }
 function renderAll(){ renderGlance(); renderTrips(); renderIdeas(); renderFavLists(); renderTemplatesList(); }
 
@@ -1542,6 +1568,28 @@ function packSortFn(a,b){
   return (a.sort_order||0)-(b.sort_order||0) || new Date(a.created_at||0)-new Date(b.created_at||0);
 }
 let lastPackQuickAddCat = null;
+let editingPackId = null;
+function startPackEdit(id){
+  editingPackId = id;
+  renderPacking();
+}
+function packEditKey(e, id){
+  if(e.key === 'Enter'){ e.target.blur(); }
+  else if(e.key === 'Escape'){ editingPackId = null; renderPacking(); }
+}
+function savePackInlineEdit(id){
+  if(editingPackId !== id) return;
+  const input = document.getElementById('packEditInput');
+  editingPackId = null;
+  if(!input){ renderPacking(); return; }
+  const name = input.value.trim();
+  const p = db.packing.find(x => x.id === id);
+  if(p && name && name !== p.name){
+    p.name = name; p.updated_at = nowIso();
+    markDirty('packing', id);
+  }
+  renderPacking();
+}
 function renderPacking(){
   const list = document.getElementById('packingList');
   const items = db.packing.filter(p => p.trip_id === currentTripId && !p._deleted);
@@ -1574,7 +1622,9 @@ function renderPacking(){
             <button ${idx===catItems.length-1?'disabled':''} onclick="movePackItem('${p.id}',1)">▼</button>
           </div>` : ''}
           <input type="checkbox" ${p.checked ? 'checked' : ''} onchange="togglePackItem('${p.id}')">
-          <span class="pack-name pack-name-tappable" onclick="openPackItemModal('${p.id}')">${esc(p.name)}</span>
+          ${p.id === editingPackId ?
+            `<input type="text" class="pack-inline-edit" id="packEditInput" value="${esc(p.name)}" onkeydown="packEditKey(event,'${p.id}')" onblur="savePackInlineEdit('${p.id}')">` :
+            `<span class="pack-name pack-name-tappable" onclick="startPackEdit('${p.id}')">${esc(p.name)}</span>`}
           <button class="icon-btn" onclick="deletePackItem('${p.id}')">✕</button>
         </div>
       `).join('')}
@@ -1605,6 +1655,10 @@ function renderPacking(){
     const again = list.querySelector('.pack-quick-add[data-category="' + CSS.escape(lastPackQuickAddCat) + '"]');
     if(again) again.focus();
     lastPackQuickAddCat = null;
+  }
+  if(editingPackId){
+    const editInput = document.getElementById('packEditInput');
+    if(editInput){ editInput.focus(); editInput.setSelectionRange(editInput.value.length, editInput.value.length); }
   }
   const checkedCount = items.filter(p => p.checked).length;
   const pct = Math.round(100 * checkedCount / items.length);
@@ -1791,7 +1845,10 @@ function deleteWishlistItem(id){
 /* =========================================================
    PACKING LIST TEMPLATES (top-level management tab)
    ========================================================= */
-let templateDraftItems = [];
+let currentTemplateId = null;
+let editingTemplateItemIdx = null;
+let lastTemplateQuickAddCat = null;
+
 function renderTemplatesList(){
   const list = document.getElementById('templatesList');
   if(!list) return;
@@ -1801,101 +1858,218 @@ function renderTemplatesList(){
     return;
   }
   list.innerHTML = templates.map(t => `
-    <div class="card">
+    <div class="card fav-list-card" onclick="openTemplateDetail('${t.id}')">
       <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
         <div>
           <div class="trip-title">${esc(t.name)}</div>
           <div class="trip-meta">${t.items.length} item${t.items.length===1?'':'s'}</div>
         </div>
-        <div class="item-actions">
-          <button class="icon-btn" onclick="openTemplateEditModal('${t.id}')">✎ Edit</button>
-          <button class="icon-btn" onclick="deleteTemplate('${t.id}')">✕ Delete</button>
-        </div>
+        <button class="icon-btn" onclick="event.stopPropagation(); deleteTemplate('${t.id}')">✕ Delete</button>
       </div>
     </div>
   `).join('');
 }
-function openTemplateEditModal(id){
-  const t = id ? db.templates.find(x => x.id === id) : { name:'', items:[] };
-  templateDraftItems = JSON.parse(JSON.stringify(t.items || []));
-  const otherTemplates = db.templates.filter(x => !x._deleted && x.id !== id);
+
+function openTemplateDetail(id){
+  currentTemplateId = id;
+  editingTemplateItemIdx = null;
+  switchTab('templateDetail');
+}
+function renderTemplateDetail(){
+  const t = db.templates.find(x => x.id === currentTemplateId);
+  if(!t){ switchTab('packingTemplates'); return; }
+  document.getElementById('templateDetailName').textContent = t.name;
+  document.getElementById('templateDetailMeta').textContent = t.items.length + ' item' + (t.items.length===1?'':'s') + ' — used whenever this template is applied to a trip';
+  renderTemplateItems();
+}
+function renderTemplateItems(){
+  const t = db.templates.find(x => x.id === currentTemplateId);
+  const wrap = document.getElementById('templateItemsList');
+  if(!t){ return; }
+  if(t.items.length === 0){
+    wrap.innerHTML = `<div class="empty-state"><h3>No items yet</h3><p>Use + Add item to start the first category.</p></div>`;
+    return;
+  }
+  const groups = {};
+  const categoryOrder = [];
+  t.items.forEach((item, idx) => {
+    const cat = item.category || 'General';
+    if(!groups[cat]){ groups[cat] = []; categoryOrder.push(cat); }
+    groups[cat].push({ item, idx });
+  });
+  wrap.innerHTML = categoryOrder.map(cat => `
+    <div class="pack-cat">
+      <div class="pack-cat-head">
+        <div class="pack-cat-title">${esc(cat)}</div>
+        <button class="icon-btn tmpl-cat-delete" data-category="${esc(cat)}">✕ Delete category</button>
+      </div>
+      ${groups[cat].map(({item, idx}) => `
+        <div class="pack-item">
+          ${idx === editingTemplateItemIdx ?
+            `<input type="text" class="pack-inline-edit" id="templateEditInput" value="${esc(item.name)}" onkeydown="templateItemEditKey(event,${idx})" onblur="saveTemplateItemEdit(${idx})">` :
+            `<span class="pack-name pack-name-tappable" onclick="startTemplateItemEdit(${idx})">${esc(item.name)}</span>`}
+          <button class="icon-btn" onclick="deleteTemplateItem(${idx})">✕</button>
+        </div>
+      `).join('')}
+      <div class="quick-add">
+        <input type="text" class="tmpl-quick-add" data-category="${esc(cat)}" placeholder="Add to ${esc(cat)}…">
+      </div>
+    </div>
+  `).join('');
+  wrap.querySelectorAll('.tmpl-cat-delete').forEach(btn => {
+    btn.addEventListener('click', () => deleteTemplateCategory(btn.dataset.category));
+  });
+  wrap.querySelectorAll('.tmpl-quick-add').forEach(input => {
+    input.addEventListener('keydown', (e) => {
+      if(e.key !== 'Enter') return;
+      const name = input.value.trim();
+      if(!name) return;
+      const tt = db.templates.find(x => x.id === currentTemplateId);
+      tt.items.push({ name, category: input.dataset.category });
+      tt.updated_at = nowIso();
+      markDirty('templates', tt.id);
+      lastTemplateQuickAddCat = input.dataset.category;
+      renderTemplateDetail();
+    });
+  });
+  if(lastTemplateQuickAddCat){
+    const again = wrap.querySelector('.tmpl-quick-add[data-category="' + CSS.escape(lastTemplateQuickAddCat) + '"]');
+    if(again) again.focus();
+    lastTemplateQuickAddCat = null;
+  }
+  if(editingTemplateItemIdx !== null){
+    const editInput = document.getElementById('templateEditInput');
+    if(editInput){ editInput.focus(); editInput.setSelectionRange(editInput.value.length, editInput.value.length); }
+  }
+}
+function startTemplateItemEdit(idx){
+  editingTemplateItemIdx = idx;
+  renderTemplateItems();
+}
+function templateItemEditKey(e, idx){
+  if(e.key === 'Enter'){ e.target.blur(); }
+  else if(e.key === 'Escape'){ editingTemplateItemIdx = null; renderTemplateItems(); }
+}
+function saveTemplateItemEdit(idx){
+  if(editingTemplateItemIdx !== idx) return;
+  const input = document.getElementById('templateEditInput');
+  editingTemplateItemIdx = null;
+  const t = db.templates.find(x => x.id === currentTemplateId);
+  if(input && t && t.items[idx]){
+    const name = input.value.trim();
+    if(name && name !== t.items[idx].name){
+      t.items[idx].name = name;
+      t.updated_at = nowIso();
+      markDirty('templates', t.id);
+    }
+  }
+  renderTemplateDetail();
+}
+function deleteTemplateItem(idx){
+  const t = db.templates.find(x => x.id === currentTemplateId);
+  if(!t || !t.items[idx]) return;
+  t.items.splice(idx, 1);
+  t.updated_at = nowIso();
+  markDirty('templates', t.id);
+  editingTemplateItemIdx = null;
+  renderTemplateDetail();
+}
+function deleteTemplateCategory(cat){
+  const t = db.templates.find(x => x.id === currentTemplateId);
+  if(!t) return;
+  const count = t.items.filter(i => (i.category || 'General') === cat).length;
+  if(count === 0) return;
+  if(!confirm('Delete the "' + cat + '" category and all ' + count + ' item' + (count===1?'':'s') + ' in it?')) return;
+  t.items = t.items.filter(i => (i.category || 'General') !== cat);
+  t.updated_at = nowIso();
+  markDirty('templates', t.id);
+  editingTemplateItemIdx = null;
+  renderTemplateDetail();
+}
+function openTemplateItemModal(){
   openModal(`
-    <h3>${id ? 'Edit' : 'New'} packing template</h3>
-    ${!id && otherTemplates.length > 0 ? `
+    <h3>Add template item</h3>
+    <div class="form-row"><label>Item</label><input type="text" id="m-tiname" placeholder="e.g. Sunscreen"></div>
+    <div class="form-row"><label>Category</label><input type="text" id="m-ticat" placeholder="e.g. Toiletries" value="General"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveTemplateItemFromModal()">Add</button>
+    </div>
+  `);
+}
+function saveTemplateItemFromModal(){
+  const name = document.getElementById('m-tiname').value.trim();
+  if(!name) return;
+  const t = db.templates.find(x => x.id === currentTemplateId);
+  if(!t) return;
+  t.items.push({ name, category: document.getElementById('m-ticat').value.trim() || 'General' });
+  t.updated_at = nowIso();
+  markDirty('templates', t.id);
+  closeModal(); renderTemplateDetail();
+}
+function openTemplateRenameModal(){
+  const t = db.templates.find(x => x.id === currentTemplateId);
+  if(!t) return;
+  openModal(`
+    <h3>Rename template</h3>
+    <div class="form-row"><label>Template name</label><input type="text" id="m-tname" value="${esc(t.name)}"></div>
+    <div class="modal-actions">
+      <button class="btn btn-danger btn-sm" onclick="deleteTemplate('${t.id}')">Delete template</button>
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveTemplateRename()">Save</button>
+    </div>
+  `);
+}
+function saveTemplateRename(){
+  const t = db.templates.find(x => x.id === currentTemplateId);
+  if(!t) return;
+  t.name = document.getElementById('m-tname').value.trim() || 'Untitled template';
+  t.updated_at = nowIso();
+  markDirty('templates', t.id);
+  closeModal(); renderTemplateDetail(); renderTemplatesList();
+}
+function openTemplateCreateModal(){
+  const others = db.templates.filter(x => !x._deleted);
+  openModal(`
+    <h3>New packing template</h3>
+    <div class="form-row"><label>Template name</label><input type="text" id="m-tname" placeholder="e.g. Beach trip"></div>
+    ${others.length > 0 ? `
       <div class="form-row">
-        <label>Copy from an existing template (optional)</label>
-        <select id="m-tcopyfrom" onchange="copyTemplateDraftFrom(this.value)">
+        <label>Copy items from an existing template (optional)</label>
+        <select id="m-tcopyfrom">
           <option value="">— Start from scratch —</option>
-          ${otherTemplates.map(x => `<option value="${x.id}">${esc(x.name)} (${x.items.length} items)</option>`).join('')}
+          ${others.map(x => `<option value="${x.id}">${esc(x.name)} (${x.items.length} items)</option>`).join('')}
         </select>
       </div>
     ` : ''}
-    <div class="form-row"><label>Template name</label><input type="text" id="m-tname" placeholder="e.g. Beach trip" value="${esc(t.name)}"></div>
-    <label>Items</label>
-    <div id="templateItemRows" style="margin-bottom:10px;"></div>
-    <button class="btn btn-ghost btn-sm" onclick="addTemplateDraftRow()">+ Add item</button>
     <div class="modal-actions">
-      ${id ? `<button class="btn btn-danger" onclick="deleteTemplate('${t.id}')">Delete template</button>` : ''}
       <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
-      <button class="btn btn-primary" onclick="saveTemplateEdit(${id ? `'${id}'` : 'null'})">Save</button>
+      <button class="btn btn-primary" onclick="createTemplate()">Create</button>
     </div>
   `);
-  renderTemplateDraftRows();
 }
-function copyTemplateDraftFrom(templateId){
-  if(!templateId){ templateDraftItems = []; renderTemplateDraftRows(); return; }
-  const src = db.templates.find(x => x.id === templateId);
-  if(!src) return;
-  templateDraftItems = JSON.parse(JSON.stringify(src.items || []));
-  const nameField = document.getElementById('m-tname');
-  if(nameField && !nameField.value.trim()){ nameField.value = src.name + ' copy'; }
-  renderTemplateDraftRows();
-}
-function renderTemplateDraftRows(){
-  const wrap = document.getElementById('templateItemRows');
-  if(templateDraftItems.length === 0){
-    wrap.innerHTML = `<div class="trip-meta" style="margin-bottom:8px;">No items yet — add your first one below.</div>`;
-    return;
-  }
-  wrap.innerHTML = templateDraftItems.map((item, idx) => `
-    <div class="form-grid" style="grid-template-columns: 1fr 1fr auto; gap:8px; margin-bottom:8px; align-items:center;">
-      <input type="text" value="${esc(item.name)}" placeholder="Item" oninput="updateTemplateDraftRow(${idx}, 'name', this.value)">
-      <input type="text" value="${esc(item.category)}" placeholder="Category" oninput="updateTemplateDraftRow(${idx}, 'category', this.value)">
-      <button class="icon-btn" onclick="removeTemplateDraftRow(${idx})">✕</button>
-    </div>
-  `).join('');
-}
-function addTemplateDraftRow(){
-  templateDraftItems.push({ name:'', category:'General' });
-  renderTemplateDraftRows();
-}
-function updateTemplateDraftRow(idx, field, value){
-  templateDraftItems[idx][field] = value;
-}
-function removeTemplateDraftRow(idx){
-  templateDraftItems.splice(idx, 1);
-  renderTemplateDraftRows();
-}
-function saveTemplateEdit(id){
+function createTemplate(){
   const name = document.getElementById('m-tname').value.trim() || 'Untitled template';
-  const items = templateDraftItems.filter(i => i.name && i.name.trim()).map(i => ({ name: i.name.trim(), category: (i.category || 'General').trim() || 'General' }));
-  if(id){
-    const t = db.templates.find(x => x.id === id);
-    t.name = name; t.items = items; t.updated_at = nowIso();
-    markDirty('templates', id);
-  } else {
-    const row = { id: uid(), family_code: familyCode, name, items, created_at: nowIso(), updated_at: nowIso() };
-    db.templates.push(row);
-    markDirty('templates', row.id);
+  const copySel = document.getElementById('m-tcopyfrom');
+  let items = [];
+  if(copySel && copySel.value){
+    const src = db.templates.find(x => x.id === copySel.value);
+    if(src){ items = JSON.parse(JSON.stringify(src.items || [])); }
   }
-  closeModal(); renderTemplatesList();
+  const row = { id: uid(), family_code: familyCode, name, items, created_at: nowIso(), updated_at: nowIso() };
+  db.templates.push(row);
+  markDirty('templates', row.id);
+  closeModal();
+  openTemplateDetail(row.id);
 }
 function deleteTemplate(id){
   if(!confirm('Delete this packing template?')) return;
   db.templates = db.templates.filter(t => t.id !== id);
   dirty.templates.delete(id);
   queueDelete('templates', id);
-  saveLocal(); closeModal(); renderTemplatesList();
+  saveLocal(); closeModal();
+  if(currentView() === 'templateDetail'){ switchTab('packingTemplates'); }
+  else { renderTemplatesList(); }
 }
 
 function saveTripPackingAsTemplate(){
