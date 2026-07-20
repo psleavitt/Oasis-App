@@ -13,6 +13,7 @@
 <link rel="apple-touch-icon" href="./icon-192.png">
 <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js"></script>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500&family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -528,19 +529,21 @@
   .history-cost{ font-weight:700; font-size:0.82rem; white-space:nowrap; margin-left:auto; }
   .history-name + .history-cost{ margin-left:auto; }
 
-  /* Trip wishlist (Ideas subtab) */
-  .wishlist-item{ display:flex; align-items:center; gap:8px; padding: 7px 0; border-bottom: 1px solid var(--paper-darker); }
-  .wishlist-item:last-child{ border-bottom:none; }
-  .wishlist-text{ flex:1; cursor:pointer; }
-  .wishlist-item input{
-    flex:1;
-    padding: 6px 10px;
+  /* Trip Ideas (free-form notes) */
+  .ideas-freeform{
+    width:100%;
+    min-height: 220px;
+    padding: 12px 14px;
     border-radius: 8px;
-    border: 1px solid var(--sea-soft);
+    border: 1px solid var(--paper-darker);
     background: var(--paper);
     color: var(--ink);
-    font-size: 0.92rem;
+    font-size: 0.95rem;
+    font-family: 'Quicksand', sans-serif;
+    line-height: 1.5;
+    resize: vertical;
   }
+  .ideas-savehint{ font-size:0.75rem; color: var(--sea); text-align:right; height:16px; margin-top:4px; }
   .pack-item{ display:flex; align-items:center; gap:8px; padding: 4px 0; }
   .pack-item input[type=checkbox]{ width:18px; height:18px; accent-color: var(--sea); }
   .pack-item.checked .pack-name{ text-decoration: line-through; color: var(--ink-soft); }
@@ -569,6 +572,16 @@
   .pack-item .rank-reorder button{ width:22px; height:22px; font-size:0.6rem; }
   .rank-reorder-compact{ flex-direction:row; gap:3px; }
   .rank-reorder-compact button{ width:22px; height:22px; font-size:0.6rem; }
+  .drag-handle{
+    cursor: grab;
+    touch-action: none;
+    padding: 2px 6px;
+    color: var(--ink-soft);
+    font-size: 1.05rem;
+    line-height:1;
+    user-select: none;
+  }
+  .drag-ghost{ opacity: 0.4; background: var(--paper-darker); }
 
   /* Ideas */
   .idea-card{ position:relative; }
@@ -693,13 +706,11 @@
 
       <div class="subview" id="sub-tripideas">
         <div class="section-head" style="margin-bottom:10px;">
-          <div class="section-sub">Loose ideas for this trip — not on the official itinerary yet</div>
+          <div class="section-sub">Loose ideas for this trip — not on the official itinerary yet. Saves as you type.</div>
         </div>
         <div class="card">
-          <div class="quick-add">
-            <input type="text" id="wishlistQuickAdd" placeholder="Add an idea and press Enter…" onkeydown="wishlistQuickAddKey(event)">
-          </div>
-          <div id="wishlistList"></div>
+          <textarea id="tripIdeasNotes" class="ideas-freeform" placeholder="Restaurant Hannah wants to try, that hike Shannon saw on Instagram, a museum if it rains..." oninput="queueTripIdeasSave()" onblur="saveTripIdeasNotes()"></textarea>
+          <div class="ideas-savehint" id="ideasSaveHint"></div>
         </div>
       </div>
 
@@ -863,13 +874,12 @@ const TABLES = {
   favoriteLists: 'oasis_favorite_lists',
   favoriteItems: 'oasis_favorite_items',
   ideas: 'oasis_trip_ideas',
-  wishlist: 'oasis_trip_wishlist',
   history: 'oasis_trip_history'
 };
 
 let familyCode = localStorage.getItem('oasis_active_code') || '';
-let db = { trips:[], itinerary:[], packing:[], templates:[], favoriteLists:[], favoriteItems:[], ideas:[], wishlist:[], history:[] };
-let dirty = { trips:new Set(), itinerary:new Set(), packing:new Set(), templates:new Set(), favoriteLists:new Set(), favoriteItems:new Set(), ideas:new Set(), wishlist:new Set(), history:new Set() };
+let db = { trips:[], itinerary:[], packing:[], templates:[], favoriteLists:[], favoriteItems:[], ideas:[], history:[] };
+let dirty = { trips:new Set(), itinerary:new Set(), packing:new Set(), templates:new Set(), favoriteLists:new Set(), favoriteItems:new Set(), ideas:new Set(), history:new Set() };
 let currentTripId = null;
 let pushTimer = null;
 let pullTimer = null;
@@ -1128,7 +1138,7 @@ function switchSubtab(sub){
   document.getElementById('sub-' + sub).classList.add('active');
   document.querySelector('.subtab-btn[data-sub="' + sub + '"]').classList.add('active');
   if(sub === 'itinerary') renderItinerary();
-  else if(sub === 'tripideas') renderWishlist();
+  else if(sub === 'tripideas') renderTripIdeasNotes();
   else if(sub === 'budget') renderBudget();
   else if(sub === 'packing') renderPacking();
 }
@@ -1284,7 +1294,7 @@ function saveTrip(id){
 function deleteTrip(id){
   if(!confirm('Delete this trip and all its itinerary and packing items?')) return;
   db.trips = db.trips.filter(t => t.id !== id);
-  ['itinerary','packing','wishlist'].forEach(key => { db[key] = db[key].filter(r => r.trip_id !== id); });
+  ['itinerary','packing'].forEach(key => { db[key] = db[key].filter(r => r.trip_id !== id); });
   dirty.trips.delete(id);
   queueDelete('trips', id);
   saveLocal(); closeModal(); switchTab('trips');
@@ -1325,7 +1335,7 @@ function demoteTripToIdea(id){
   markDirty('ideas', row.id);
 
   db.trips = db.trips.filter(r => r.id !== id);
-  ['itinerary','packing','wishlist'].forEach(key => { db[key] = db[key].filter(r => r.trip_id !== id); });
+  ['itinerary','packing'].forEach(key => { db[key] = db[key].filter(r => r.trip_id !== id); });
   dirty.trips.delete(id);
   queueDelete('trips', id);
   saveLocal(); closeModal();
@@ -1351,7 +1361,7 @@ function renderTripDetail(){
   const pill = document.getElementById('tdStatusPill');
   pill.textContent = STATUS_LABELS[status];
   pill.className = 'status-pill status-' + status;
-  renderItinerary(); renderWishlist(); renderBudget(); renderPacking();
+  renderItinerary(); renderTripIdeasNotes(); renderBudget(); renderPacking();
 }
 
 /* =========================================================
@@ -1625,6 +1635,15 @@ function savePackInlineEdit(id){
   }
   renderPacking();
 }
+function initReorderSortable(container, onReorder){
+  if(typeof Sortable === 'undefined') return null;
+  return new Sortable(container, {
+    handle: '.drag-handle',
+    animation: 150,
+    ghostClass: 'drag-ghost',
+    onEnd: onReorder
+  });
+}
 function renderPacking(){
   const list = document.getElementById('packingList');
   const items = db.packing.filter(p => p.trip_id === currentTripId && !p._deleted);
@@ -1641,7 +1660,7 @@ function renderPacking(){
     if(!groups[cat]){ groups[cat] = []; categoryOrder.push(cat); }
     groups[cat].push(p);
   });
-  list.innerHTML = categoryOrder.map(cat => {
+  list.innerHTML = categoryOrder.map((cat, catIdx) => {
     const catItems = groups[cat].sort(packSortFn);
     return `
     <div class="pack-cat">
@@ -1649,13 +1668,10 @@ function renderPacking(){
         <div class="pack-cat-title">${esc(cat)}</div>
         <button class="icon-btn pack-cat-delete" data-category="${esc(cat)}">✕ Delete category</button>
       </div>
-      ${catItems.map((p, idx) => `
-        <div class="pack-item ${p.checked ? 'checked' : ''}">
-          ${packReorderMode ? `
-          <div class="rank-reorder">
-            <button ${idx===0?'disabled':''} onclick="movePackItem('${p.id}',-1)">▲</button>
-            <button ${idx===catItems.length-1?'disabled':''} onclick="movePackItem('${p.id}',1)">▼</button>
-          </div>` : ''}
+      <div class="pack-cat-items" data-category="${esc(cat)}">
+      ${catItems.map((p) => `
+        <div class="pack-item ${p.checked ? 'checked' : ''}" data-id="${p.id}">
+          ${packReorderMode ? `<span class="drag-handle">⠿</span>` : ''}
           <input type="checkbox" ${p.checked ? 'checked' : ''} onchange="togglePackItem('${p.id}')">
           ${p.id === editingPackId ?
             `<input type="text" class="pack-inline-edit" id="packEditInput" value="${esc(p.name)}" onkeydown="packEditKey(event,'${p.id}')" onblur="savePackInlineEdit('${p.id}')">` :
@@ -1663,6 +1679,7 @@ function renderPacking(){
           <button class="icon-btn" onclick="deletePackItem('${p.id}')">✕</button>
         </div>
       `).join('')}
+      </div>
       <div class="quick-add">
         <input type="text" class="pack-quick-add" data-category="${esc(cat)}" placeholder="Add to ${esc(cat)}…">
       </div>
@@ -1672,6 +1689,19 @@ function renderPacking(){
   list.querySelectorAll('.pack-cat-delete').forEach(btn => {
     btn.addEventListener('click', () => deletePackCategory(btn.dataset.category));
   });
+  if(packReorderMode){
+    list.querySelectorAll('.pack-cat-items').forEach(container => {
+      initReorderSortable(container, () => {
+        const cat = container.dataset.category;
+        const domIds = Array.from(container.querySelectorAll('.pack-item')).map(el => el.dataset.id);
+        domIds.forEach((id, i) => {
+          const p = db.packing.find(x => x.id === id);
+          if(p && p.sort_order !== i + 1){ p.sort_order = i + 1; p.updated_at = nowIso(); markDirty('packing', p.id); }
+        });
+        saveLocal();
+      });
+    });
+  }
   list.querySelectorAll('.pack-quick-add').forEach(input => {
     input.addEventListener('keydown', (e) => {
       if(e.key !== 'Enter') return;
@@ -1700,26 +1730,7 @@ function renderPacking(){
   document.getElementById('packProgress').style.width = pct + '%';
   document.getElementById('packPercentLabel').textContent = pct + '% packed (' + checkedCount + '/' + items.length + ')';
 }
-function movePackItem(id, direction){
-  const item = db.packing.find(p => p.id === id);
-  if(!item) return;
-  const cat = item.category || 'General';
-  const catItems = db.packing
-    .filter(p => p.trip_id === currentTripId && !p._deleted && (p.category || 'General') === cat)
-    .sort(packSortFn);
-  // Normalize to clean sequential sort_order first (older items may all be 0)
-  catItems.forEach((p, i) => {
-    if(p.sort_order !== i + 1){ p.sort_order = i + 1; p.updated_at = nowIso(); markDirty('packing', p.id); }
-  });
-  const idx = catItems.findIndex(p => p.id === id);
-  const swapIdx = idx + direction;
-  if(idx === -1 || swapIdx < 0 || swapIdx >= catItems.length) return;
-  const a = catItems[idx], b = catItems[swapIdx];
-  const tmp = a.sort_order; a.sort_order = b.sort_order; b.sort_order = tmp;
-  a.updated_at = nowIso(); b.updated_at = nowIso();
-  markDirty('packing', a.id); markDirty('packing', b.id);
-  renderPacking();
-}
+
 function togglePackItem(id){
   const p = db.packing.find(r => r.id === id);
   p.checked = !p.checked; p.updated_at = nowIso();
@@ -1802,79 +1813,33 @@ function applyTemplate(templateId){
 }
 
 /* =========================================================
-   TRIP IDEAS (wishlist) — loose per-trip notes with quick add
+   TRIP IDEAS — free-form notes textarea, autosaves as you type
    ========================================================= */
-let editingWishlistId = null;
-function renderWishlist(){
-  const wrap = document.getElementById('wishlistList');
-  const items = db.wishlist.filter(w => w.trip_id === currentTripId && !w._deleted)
-    .sort((a,b) => (a.sort_order||0)-(b.sort_order||0) || new Date(a.created_at||0)-new Date(b.created_at||0));
-  if(items.length === 0){
-    wrap.innerHTML = `<div class="trip-meta" style="padding:10px 0;">Nothing yet — jot down anything you might want to do.</div>`;
-    return;
-  }
-  wrap.innerHTML = items.map(w => {
-    if(w.id === editingWishlistId){
-      return `
-      <div class="wishlist-item">
-        <input type="text" id="wishlistEditInput" value="${esc(w.content)}"
-          onkeydown="wishlistEditKey(event,'${w.id}')" onblur="saveWishlistEdit('${w.id}')">
-      </div>`;
-    }
-    return `
-    <div class="wishlist-item">
-      <span class="wishlist-text" onclick="startWishlistEdit('${w.id}')">${esc(w.content)}</span>
-      <button class="icon-btn" onclick="deleteWishlistItem('${w.id}')">✕</button>
-    </div>`;
-  }).join('');
-  if(editingWishlistId){
-    const input = document.getElementById('wishlistEditInput');
-    if(input){ input.focus(); input.setSelectionRange(input.value.length, input.value.length); }
-  }
+let ideasSaveTimer = null;
+function renderTripIdeasNotes(){
+  const t = db.trips.find(r => r.id === currentTripId);
+  const el = document.getElementById('tripIdeasNotes');
+  if(!t || !el) return;
+  el.value = t.ideas_notes || '';
+  const hint = document.getElementById('ideasSaveHint');
+  if(hint) hint.textContent = '';
 }
-function wishlistQuickAddKey(e){
-  if(e.key !== 'Enter') return;
-  const input = document.getElementById('wishlistQuickAdd');
-  const content = input.value.trim();
-  if(!content) return;
-  const existing = db.wishlist.filter(w => w.trip_id === currentTripId && !w._deleted);
-  const row = {
-    id: uid(), family_code: familyCode, trip_id: currentTripId, content,
-    sort_order: existing.reduce((m,w) => Math.max(m, w.sort_order||0), 0) + 1,
-    created_at: nowIso(), updated_at: nowIso()
-  };
-  db.wishlist.push(row);
-  markDirty('wishlist', row.id);
-  input.value = '';
-  renderWishlist();
-  input.focus();
+function queueTripIdeasSave(){
+  clearTimeout(ideasSaveTimer);
+  ideasSaveTimer = setTimeout(saveTripIdeasNotes, 800);
 }
-function startWishlistEdit(id){
-  editingWishlistId = id;
-  renderWishlist();
-}
-function wishlistEditKey(e, id){
-  if(e.key === 'Enter'){ e.target.blur(); }
-  else if(e.key === 'Escape'){ editingWishlistId = null; renderWishlist(); }
-}
-function saveWishlistEdit(id){
-  if(editingWishlistId !== id) return;
-  const input = document.getElementById('wishlistEditInput');
-  editingWishlistId = null;
-  if(!input){ renderWishlist(); return; }
-  const content = input.value.trim();
-  const w = db.wishlist.find(x => x.id === id);
-  if(w && content && content !== w.content){
-    w.content = content; w.updated_at = nowIso();
-    markDirty('wishlist', id);
-  }
-  renderWishlist();
-}
-function deleteWishlistItem(id){
-  db.wishlist = db.wishlist.filter(w => w.id !== id);
-  dirty.wishlist.delete(id);
-  queueDelete('wishlist', id);
-  saveLocal(); renderWishlist();
+function saveTripIdeasNotes(){
+  clearTimeout(ideasSaveTimer);
+  const t = db.trips.find(r => r.id === currentTripId);
+  const el = document.getElementById('tripIdeasNotes');
+  if(!t || !el) return;
+  const val = el.value;
+  if(val === (t.ideas_notes || '')) return;
+  t.ideas_notes = val;
+  t.updated_at = nowIso();
+  markDirty('trips', t.id);
+  const hint = document.getElementById('ideasSaveHint');
+  if(hint){ hint.textContent = 'Saved'; setTimeout(() => { if(hint.textContent === 'Saved') hint.textContent = ''; }, 1500); }
 }
 
 /* =========================================================
@@ -1901,7 +1866,6 @@ function historyEntries(){
 }
 function renderHistoryDash(entries){
   const wrap = document.getElementById('historyDash');
-  // Most frequently visited (by destination)
   const counts = {};
   entries.forEach(e => {
     const key = e.destination.trim().toLowerCase();
@@ -1910,7 +1874,6 @@ function renderHistoryDash(entries){
     counts[key].count++;
   });
   const topVisited = Object.values(counts).sort((a,b) => b.count - a.count || a.label.localeCompare(b.label)).slice(0,5);
-  // Most expensive
   const topExpensive = entries.filter(e => e.cost != null).sort((a,b) => b.cost - a.cost).slice(0,10);
   if(topVisited.length === 0 && topExpensive.length === 0){ wrap.innerHTML = ''; return; }
   wrap.innerHTML = `<div class="idea-glance-grid" style="margin-bottom:20px;">
@@ -2086,19 +2049,17 @@ function renderTemplateItems(){
         </div>
         <button class="icon-btn tmpl-cat-delete" data-category="${esc(cat)}">✕ Delete category</button>
       </div>
-      ${groups[cat].map(({item, idx}, pos) => `
-        <div class="pack-item">
-          ${templateReorderMode ? `
-          <div class="rank-reorder">
-            <button ${pos===0?'disabled':''} onclick="moveTemplateItem(${idx},-1)">▲</button>
-            <button ${pos===groups[cat].length-1?'disabled':''} onclick="moveTemplateItem(${idx},1)">▼</button>
-          </div>` : ''}
+      <div class="pack-cat-items" data-category="${esc(cat)}">
+      ${groups[cat].map(({item, idx}) => `
+        <div class="pack-item" data-idx="${idx}">
+          ${templateReorderMode ? `<span class="drag-handle">⠿</span>` : ''}
           ${idx === editingTemplateItemIdx ?
             `<input type="text" class="pack-inline-edit" id="templateEditInput" value="${esc(item.name)}" onkeydown="templateItemEditKey(event,${idx})" onblur="saveTemplateItemEdit(${idx})">` :
             `<span class="pack-name pack-name-tappable" onclick="startTemplateItemEdit(${idx})">${esc(item.name)}</span>`}
           <button class="icon-btn" onclick="deleteTemplateItem(${idx})">✕</button>
         </div>
       `).join('')}
+      </div>
       <div class="quick-add">
         <input type="text" class="tmpl-quick-add" data-category="${esc(cat)}" placeholder="Add to ${esc(cat)}…">
       </div>
@@ -2113,6 +2074,22 @@ function renderTemplateItems(){
   wrap.querySelectorAll('.tmpl-cat-down').forEach(btn => {
     btn.addEventListener('click', () => moveTemplateCategory(btn.dataset.category, 1));
   });
+  if(templateReorderMode){
+    wrap.querySelectorAll('.pack-cat-items').forEach(container => {
+      initReorderSortable(container, () => {
+        const cat = container.dataset.category;
+        const tt = db.templates.find(x => x.id === currentTemplateId);
+        if(!tt) return;
+        const domIdxOrder = Array.from(container.querySelectorAll('.pack-item')).map(el => parseInt(el.dataset.idx, 10));
+        const catSlots = tt.items.map((it,i) => ({it,i})).filter(x => (x.it.category || 'General') === cat).map(x => x.i);
+        const snapshot = tt.items.slice();
+        catSlots.forEach((slot, i) => { tt.items[slot] = snapshot[domIdxOrder[i]]; });
+        tt.updated_at = nowIso();
+        markDirty('templates', tt.id);
+        editingTemplateItemIdx = null;
+      });
+    });
+  }
   wrap.querySelectorAll('.tmpl-quick-add').forEach(input => {
     input.addEventListener('keydown', (e) => {
       if(e.key !== 'Enter') return;
@@ -2136,21 +2113,7 @@ function renderTemplateItems(){
     if(editInput){ editInput.focus(); editInput.setSelectionRange(editInput.value.length, editInput.value.length); }
   }
 }
-function moveTemplateItem(globalIdx, direction){
-  const t = db.templates.find(x => x.id === currentTemplateId);
-  if(!t || !t.items[globalIdx]) return;
-  const cat = t.items[globalIdx].category || 'General';
-  const catIndices = t.items.map((it, i) => ({ it, i })).filter(x => (x.it.category || 'General') === cat).map(x => x.i);
-  const pos = catIndices.indexOf(globalIdx);
-  const swapPos = pos + direction;
-  if(pos === -1 || swapPos < 0 || swapPos >= catIndices.length) return;
-  const otherIdx = catIndices[swapPos];
-  [t.items[globalIdx], t.items[otherIdx]] = [t.items[otherIdx], t.items[globalIdx]];
-  t.updated_at = nowIso();
-  markDirty('templates', t.id);
-  editingTemplateItemIdx = null;
-  renderTemplateItems();
-}
+
 function moveTemplateCategory(cat, direction){
   const t = db.templates.find(x => x.id === currentTemplateId);
   if(!t) return;
