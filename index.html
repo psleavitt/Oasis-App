@@ -978,11 +978,15 @@ async function pushAll(){
   let hadError = false;
   // Process queued deletions first, so a delete followed by a re-add can't reverse order
   for(const key of Object.keys(TABLES)){
-    const delIds = pendingDeletes[key];
+    const delIds = pendingDeletes[key].slice(); // snapshot — more may be queued while this request is in flight
     if(delIds.length === 0) continue;
     try{
       const res = await supaFetch('/rest/v1/' + TABLES[key] + '?id=in.(' + delIds.join(',') + ')', { method:'DELETE' });
-      if(res.ok){ pendingDeletes[key] = []; }
+      if(res.ok){
+        // Remove only the ids this request actually covered — anything queued
+        // during the await (e.g. a second quick delete) must stay queued.
+        pendingDeletes[key] = pendingDeletes[key].filter(id => !delIds.includes(id));
+      }
       else { hadError = true; }
     }catch(e){ hadError = true; }
   }
@@ -1030,10 +1034,10 @@ async function pullAll(){
       });
       // Remove local rows that no longer exist on the server (deleted from another
       // device). Guards: keep rows with unsynced local edits (dirty), and rows
-      // written in the last 60s — protects a just-created row from being removed
-      // if this pull's snapshot was taken before its push landed.
+      // written in the last 20s — protects a just-created/just-edited row from
+      // being removed if this pull's snapshot was taken before its push landed.
       const remoteIds = new Set(rows.map(r => r.id));
-      const recentCutoff = Date.now() - 60000;
+      const recentCutoff = Date.now() - 20000;
       db[key] = db[key].filter(local => {
         if(remoteIds.has(local.id)) return true;
         if(dirty[key].has(local.id)) return true;
@@ -1043,8 +1047,17 @@ async function pullAll(){
     }
     saveLocal();
     setSyncStatus('idle');
-    renderCurrentView();
+    // Don't rebuild the DOM while the person is actively typing somewhere —
+    // a background sync landing mid-keystroke would otherwise wipe out
+    // whatever they'd typed so far, since it isn't saved to the data model
+    // until they blur/confirm. The merged data is already saved above, so
+    // it'll show up as soon as they finish this edit and something re-renders.
+    if(!isEditingText()){ renderCurrentView(); }
   }catch(e){ setSyncStatus('err'); }
+}
+function isEditingText(){
+  const el = document.activeElement;
+  return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA');
 }
 
 function startSyncLoops(){
