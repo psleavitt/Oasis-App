@@ -30,6 +30,8 @@
     --sea-soft: #4FB3AE;
     --card-shadow: 0 1px 0 rgba(27,75,71,0.06), 0 6px 18px rgba(14,138,138,0.10);
     --radius: 14px;
+    --topbar-h: 61px;
+    --subtabs-h: 47px;
   }
   *{ box-sizing: border-box; }
   html,body{ margin:0; padding:0; }
@@ -226,6 +228,15 @@
   .section-head h2{ font-size: 1.5rem; }
   .section-sub{ color: var(--ink-soft); font-size: 0.88rem; margin-top:2px; }
 
+  /* Keep each trip-detail subview's action row visible while scrolling a long list */
+  .subview .section-head{
+    position: sticky;
+    top: calc(var(--topbar-h) + var(--subtabs-h));
+    z-index: 14;
+    background: var(--paper);
+    padding: 8px 0;
+  }
+
   .card{
     background: var(--paper-dark);
     border: 1px solid var(--paper-darker);
@@ -402,7 +413,11 @@
   .back-link:hover{ color: var(--ink); }
 
   /* Trip detail sub-tabs */
-  .subtabs{ display:flex; gap:4px; margin-bottom:16px; border-bottom: 1px solid var(--paper-darker); }
+  .subtabs{
+    display:flex; gap:4px; margin-bottom:16px; border-bottom: 1px solid var(--paper-darker);
+    position: sticky; top: var(--topbar-h); z-index: 15;
+    background: var(--paper);
+  }
   .subtab-btn{
     background:none; border:none; padding: 8px 14px;
     font-size:0.85rem; font-weight:600; color: var(--ink-soft);
@@ -1079,7 +1094,25 @@ function enterApp(code){
   document.getElementById('codeLabel').textContent = familyCode;
   renderAll();
   startSyncLoops();
+  updateStickyOffsets();
 }
+// Measures the real rendered height of the topbar and (when visible) the
+// subtabs bar, so sticky elements below them stack at the right offset
+// regardless of font size, wrapping, or screen width. Falls back to the
+// --topbar-h/--subtabs-h defaults in :root until this has run once.
+function updateStickyOffsets(){
+  const topbar = document.querySelector('.topbar');
+  if(topbar){ document.documentElement.style.setProperty('--topbar-h', topbar.offsetHeight + 'px'); }
+  const subtabs = document.querySelector('.subtabs');
+  if(subtabs && subtabs.offsetHeight > 0){
+    document.documentElement.style.setProperty('--subtabs-h', subtabs.offsetHeight + 'px');
+  }
+}
+let stickyResizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(stickyResizeTimer);
+  stickyResizeTimer = setTimeout(updateStickyOffsets, 150);
+});
 function seedDefaultTemplates(){
   if(db.templates.length > 0) return;
   const defaults = [
@@ -1351,6 +1384,7 @@ function openTripDetail(id){
   if(reorderBtn) reorderBtn.textContent = 'Reorder';
   switchTab('tripDetail');
   switchSubtab('itinerary');
+  updateStickyOffsets();
 }
 function renderTripDetail(){
   const t = db.trips.find(r => r.id === currentTripId);
@@ -1492,10 +1526,12 @@ function renderItinerary(){
     </div>`;
   }).join('');
   list.querySelectorAll('.itin-quick-add').forEach(input => {
-    input.addEventListener('keydown', (e) => {
-      if(e.key !== 'Enter') return;
+    let committed = false;
+    const commit = (refocus) => {
+      if(committed) return;
       const title = input.value.trim();
       if(!title) return;
+      committed = true;
       const day = input.dataset.day;
       const row = {
         id: uid(), family_code: familyCode, trip_id: currentTripId,
@@ -1506,9 +1542,11 @@ function renderItinerary(){
       };
       db.itinerary.push(row);
       markDirty('itinerary', row.id);
-      lastItinQuickAddDay = day;
+      if(refocus){ lastItinQuickAddDay = day; }
       renderItinerary();
-    });
+    };
+    input.addEventListener('keydown', (e) => { if(e.key === 'Enter'){ commit(true); } });
+    input.addEventListener('blur', () => commit(false));
   });
   if(lastItinQuickAddDay){
     const again = list.querySelector('.itin-quick-add[data-day="' + CSS.escape(lastItinQuickAddDay) + '"]');
@@ -1703,17 +1741,21 @@ function renderPacking(){
     });
   }
   list.querySelectorAll('.pack-quick-add').forEach(input => {
-    input.addEventListener('keydown', (e) => {
-      if(e.key !== 'Enter') return;
+    let committed = false;
+    const commit = (refocus) => {
+      if(committed) return;
       const name = input.value.trim();
       if(!name) return;
+      committed = true;
       const cat = input.dataset.category;
       const row = { id: uid(), family_code: familyCode, trip_id: currentTripId, name, category: cat, checked:false, sort_order: nextPackSortOrder(cat), created_at: nowIso(), updated_at: nowIso() };
       db.packing.push(row);
       markDirty('packing', row.id);
-      lastPackQuickAddCat = cat;
+      if(refocus){ lastPackQuickAddCat = cat; }
       renderPacking();
-    });
+    };
+    input.addEventListener('keydown', (e) => { if(e.key === 'Enter'){ commit(true); } });
+    input.addEventListener('blur', () => commit(false));
   });
   // After a quick-add re-render, put focus back in the same category's input
   if(lastPackQuickAddCat){
@@ -2091,17 +2133,21 @@ function renderTemplateItems(){
     });
   }
   wrap.querySelectorAll('.tmpl-quick-add').forEach(input => {
-    input.addEventListener('keydown', (e) => {
-      if(e.key !== 'Enter') return;
+    let committed = false;
+    const commit = (refocus) => {
+      if(committed) return;
       const name = input.value.trim();
       if(!name) return;
+      committed = true;
       const tt = db.templates.find(x => x.id === currentTemplateId);
       tt.items.push({ name, category: input.dataset.category });
       tt.updated_at = nowIso();
       markDirty('templates', tt.id);
-      lastTemplateQuickAddCat = input.dataset.category;
+      if(refocus){ lastTemplateQuickAddCat = input.dataset.category; }
       renderTemplateDetail();
-    });
+    };
+    input.addEventListener('keydown', (e) => { if(e.key === 'Enter'){ commit(true); } });
+    input.addEventListener('blur', () => commit(false));
   });
   if(lastTemplateQuickAddCat){
     const again = wrap.querySelector('.tmpl-quick-add[data-category="' + CSS.escape(lastTemplateQuickAddCat) + '"]');
