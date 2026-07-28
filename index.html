@@ -1453,17 +1453,15 @@ function renderGlance(){
   const items = db.itinerary.filter(i => i.trip_id === t.id && !i._deleted);
   const status = computeTripStatus(t);
   let html = `
-    <div class="card" style="margin-bottom:16px;">
-      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
-        <div style="display:flex; align-items:flex-start;">
-          <span class="trip-emoji">${t.emoji || '🧳'}</span>
-          <div>
-            <div class="trip-title">${esc(t.name)}</div>
-            <div class="trip-meta">${esc(t.destination || '')}${t.start_date ? ' · ' + fmtDate(t.start_date) + (t.end_date ? ' – ' + fmtDate(t.end_date) : '') : ''}</div>
-          </div>
+    <div class="card trip-card" style="margin-bottom:16px;" onclick="openTripDetail('${t.id}')">
+      <div style="display:flex; align-items:flex-start;">
+        <span class="trip-emoji">${t.emoji || '🧳'}</span>
+        <div>
+          <div class="trip-title">${esc(t.name)}</div>
+          <div class="trip-meta">${esc(t.destination || '')}${t.start_date ? ' · ' + fmtDate(t.start_date) + (t.end_date ? ' – ' + fmtDate(t.end_date) : '') : ''}</div>
         </div>
-        <span class="status-pill status-${status}">${STATUS_LABELS[status]}</span>
       </div>
+      <span class="status-pill status-${status}">${STATUS_LABELS[status]}</span>
     </div>
   `;
   if(items.length === 0){
