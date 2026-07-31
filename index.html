@@ -1417,8 +1417,8 @@ function renderTripDetail(){
 let glanceTripId = null;
 function populateGlanceTripSelect(){
   const sel = document.getElementById('glanceTripSelect');
-  const order = { active:0, upcoming:1, past:2 };
-  const trips = [...db.trips].filter(t => !t._deleted).sort((a,b) => (order[computeTripStatus(a)]??3) - (order[computeTripStatus(b)]??3) || new Date(a.start_date||0) - new Date(b.start_date||0));
+  const order = { active:0, upcoming:1 };
+  const trips = [...db.trips].filter(t => !t._deleted && computeTripStatus(t) !== 'past').sort((a,b) => (order[computeTripStatus(a)]??2) - (order[computeTripStatus(b)]??2) || new Date(a.start_date||0) - new Date(b.start_date||0));
   if(trips.length === 0){ sel.innerHTML = ''; glanceTripId = null; return; }
   if(!glanceTripId || !trips.find(t => t.id === glanceTripId)){ glanceTripId = trips[0].id; }
   sel.innerHTML = trips.map(t => `<option value="${t.id}" ${t.id===glanceTripId?'selected':''}>${t.emoji || '🧳'} ${esc(t.name)}</option>`).join('');
@@ -1447,7 +1447,10 @@ function renderGlance(){
   const content = document.getElementById('glanceContent');
   const t = db.trips.find(r => r.id === glanceTripId);
   if(!t){
-    content.innerHTML = `<div class="empty-state"><h3>No trips yet</h3><p>Add a trip to see its day-by-day plan here.</p></div>`;
+    const hasAnyTrips = db.trips.some(tr => !tr._deleted);
+    content.innerHTML = hasAnyTrips
+      ? `<div class="empty-state"><h3>Nothing upcoming</h3><p>All your trips are in the past — check History to look back, or add a new one in Trips.</p></div>`
+      : `<div class="empty-state"><h3>No trips yet</h3><p>Add a trip to see its day-by-day plan here.</p></div>`;
     return;
   }
   const items = db.itinerary.filter(i => i.trip_id === t.id && !i._deleted);
